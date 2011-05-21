@@ -139,6 +139,8 @@ static GtkWidget *make_pane(GtkWidget *notebook, int title_id)
 	return box;
 }
 
+#define SAVE_ID 0x5a73
+
 static GtkWidget *make_button_box(GtkWidget *top, int border, const opt_desc *buttons)
 {
 	GtkWidget *bb, *button;
@@ -151,7 +153,9 @@ static GtkWidget *make_button_box(GtkWidget *top, int border, const opt_desc *bu
 	gtk_box_pack_start(GTK_BOX(top), bb, FALSE, FALSE, 0);
 
 	while (buttons->label_id) {
-		button = gtk_button_new_with_label(GetString(buttons->label_id));
+		const gchar *label = buttons->label_id == SAVE_ID ? "Save"
+			: GetString(buttons->label_id);
+		button = gtk_button_new_with_label(label);
 		gtk_widget_show(button);
 		gtk_signal_connect_object(GTK_OBJECT(button), "clicked", buttons->func, NULL);
 		gtk_box_pack_start(GTK_BOX(bb), button, TRUE, TRUE, 0);
@@ -379,6 +383,13 @@ static void window_destroyed(void)
 	gtk_main_quit();
 }
 
+// "Save" button clicked
+static void cb_save(...)
+{
+	read_settings();
+	SavePrefs();
+}
+
 // "Start" button clicked
 static void cb_start(...)
 {
@@ -486,7 +497,8 @@ static void mn_zap_pram(...)
 // Menu item descriptions
 static GtkItemFactoryEntry menu_items[] = {
 	{(gchar *)GetString(STR_PREFS_MENU_FILE_GTK),		NULL,			NULL,							0, "<Branch>"},
-	{(gchar *)GetString(STR_PREFS_ITEM_START_GTK),		"<meta>S",	GTK_SIGNAL_FUNC(cb_start),		0, NULL},
+	{"/File/Save",										"<meta>S",	GTK_SIGNAL_FUNC(cb_save),		0, NULL},
+	{(gchar *)GetString(STR_PREFS_ITEM_START_GTK),		"<meta>B",	GTK_SIGNAL_FUNC(cb_start),		0, NULL},
 	{(gchar *)GetString(STR_PREFS_ITEM_ZAP_PRAM_GTK),	NULL,			GTK_SIGNAL_FUNC(mn_zap_pram),	0, NULL},
 /*	{(gchar *)GetString(STR_PREFS_ITEM_SEPL_GTK),		NULL,			NULL,							0, "<Separator>"},
 	{(gchar *)GetString(STR_PREFS_ITEM_QUIT_GTK),		"<control>Q",	GTK_SIGNAL_FUNC(cb_quit),		0, NULL}, */
@@ -544,6 +556,7 @@ bool PrefsEditor(void)
 	gtk_widget_show(notebook);
 
 	static const opt_desc buttons[] = {
+		{SAVE_ID, GTK_SIGNAL_FUNC(cb_save)},
 		{STR_START_BUTTON, GTK_SIGNAL_FUNC(cb_start)},
 		{STR_QUIT_BUTTON, GTK_SIGNAL_FUNC(cb_quit)},
 		{0, NULL}
