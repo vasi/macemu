@@ -486,10 +486,10 @@ static void mn_zap_pram(...)
 // Menu item descriptions
 static GtkItemFactoryEntry menu_items[] = {
 	{(gchar *)GetString(STR_PREFS_MENU_FILE_GTK),		NULL,			NULL,							0, "<Branch>"},
-	{(gchar *)GetString(STR_PREFS_ITEM_START_GTK),		"<control>S",	GTK_SIGNAL_FUNC(cb_start),		0, NULL},
+	{(gchar *)GetString(STR_PREFS_ITEM_START_GTK),		"<meta>S",	GTK_SIGNAL_FUNC(cb_start),		0, NULL},
 	{(gchar *)GetString(STR_PREFS_ITEM_ZAP_PRAM_GTK),	NULL,			GTK_SIGNAL_FUNC(mn_zap_pram),	0, NULL},
-	{(gchar *)GetString(STR_PREFS_ITEM_SEPL_GTK),		NULL,			NULL,							0, "<Separator>"},
-	{(gchar *)GetString(STR_PREFS_ITEM_QUIT_GTK),		"<control>Q",	GTK_SIGNAL_FUNC(cb_quit),		0, NULL},
+/*	{(gchar *)GetString(STR_PREFS_ITEM_SEPL_GTK),		NULL,			NULL,							0, "<Separator>"},
+	{(gchar *)GetString(STR_PREFS_ITEM_QUIT_GTK),		"<control>Q",	GTK_SIGNAL_FUNC(cb_quit),		0, NULL}, */
 	{(gchar *)GetString(STR_HELP_MENU_GTK),				NULL,			NULL,							0, "<LastBranch>"},
 	{(gchar *)GetString(STR_HELP_ITEM_ABOUT_GTK),		NULL,			GTK_SIGNAL_FUNC(mn_about),		0, NULL}
 };
@@ -523,6 +523,10 @@ bool PrefsEditor(void)
 	gtk_widget_hide(menu_bar);
 	gtk_osxapplication_set_menu_bar(theApp, GTK_MENU_SHELL(menu_bar));
 	gtk_osxapplication_set_use_quartz_accelerators(theApp, TRUE);
+
+	GtkOSXApplicationMenuGroup *group = gtk_osxapplication_add_app_menu_group(theApp);
+	GtkMenuItem *about_item = (GtkMenuItem*)gtk_item_factory_get_item(item_factory, "/Help/About Basilisk II");
+    gtk_osxapplication_add_app_menu_item(theApp, group, GTK_MENU_ITEM(about_item));
 
 	GtkWidget *notebook = gtk_notebook_new();
 	gtk_notebook_set_tab_pos(GTK_NOTEBOOK(notebook), GTK_POS_TOP);
