@@ -5,7 +5,7 @@
 		* We want a pretty theme--I find the gtk-quartz-engine to be rather unattractive. Build gtk-engines, for Clearlooks.
 		* Use a `.jhbuildrc.custom` containing `setup_sdk(target="10.4", sdk_version="10.4u", architectures=["i386"])`
 	* Install ige-mac-bundler: http://sourceforge.net/apps/trac/gtk-osx/wiki/Bundle
-		* It has a bug, so use my repo: https://github.com/vasi/ige-mac-bundler
+		* It has a bug with paths containing spaces, so use my repo: https://github.com/vasi/ige-mac-bundler
 		* Symlink it somewhere useful: `ln -sfn ~gtk/.local/bin/ige-mac-bundler ~gtk/gtk/inst/bin`
 
 * Build BasiliskIIGUI

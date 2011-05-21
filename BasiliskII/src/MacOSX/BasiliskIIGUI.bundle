@@ -49,7 +49,7 @@
        this bundle file is located. The application name and bundle
        identifier are taken from the plist file.
   -->
-  <plist>${project}/Info.plist</plist>
+  <plist>${project}/GUI-Info.plist</plist>
 
   <main-binary dest="${bundle}/dummy">${project}/../Unix/BasiliskIIGUI</main-binary>
 
