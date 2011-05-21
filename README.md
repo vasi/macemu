@@ -6,3 +6,9 @@
 	* Install ige-mac-bundler: http://sourceforge.net/apps/trac/gtk-osx/wiki/Bundle
 		* It has a bug, so use my repo: https://github.com/vasi/ige-mac-bundler
 
+* Build BasiliskIIGUI
+	* Setup build environment by running `HOME=~gtk ~gtk/.local/bin/jhbuild shell`
+	* Change directory to src/Unix
+	* Run autotools: `ACLOCAL_FLAGS="$ACLOCAL_FLAGS -I $PWD/m4" NO_CONFIGURE=1 ./autogen.sh`
+	* Configure: `./configure --enable-standalone-gui`. Verify that Gtk2 is detected
+	* Build: `make BasiliskIIGUI`
