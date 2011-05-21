@@ -28,6 +28,8 @@
 #include <net/if.h>
 #include <net/if_arp.h>
 
+#include <igemacintegration/gtkosxapplication.h>
+
 #ifdef HAVE_GNOMEUI
 #include <gnome.h>
 #endif
@@ -514,8 +516,13 @@ bool PrefsEditor(void)
 	gtk_accel_group_attach(accel_group, GTK_OBJECT(win));
 #endif
 	GtkWidget *menu_bar = gtk_item_factory_get_widget(item_factory, "<main>");
-	gtk_widget_show(menu_bar);
 	gtk_box_pack_start(GTK_BOX(box), menu_bar, FALSE, TRUE, 0);
+
+	// Use OS X menu bar
+	GtkOSXApplication *theApp = (GtkOSXApplication*)g_object_new(GTK_TYPE_OSX_APPLICATION, NULL);
+	gtk_widget_hide(menu_bar);
+	gtk_osxapplication_set_menu_bar(theApp, GTK_MENU_SHELL(menu_bar));
+	gtk_osxapplication_set_use_quartz_accelerators(theApp, TRUE);
 
 	GtkWidget *notebook = gtk_notebook_new();
 	gtk_notebook_set_tab_pos(GTK_NOTEBOOK(notebook), GTK_POS_TOP);
@@ -541,6 +548,7 @@ bool PrefsEditor(void)
 
 	// Show window and enter main loop
 	gtk_widget_show(win);
+	gtk_osxapplication_ready(theApp); // Go, go OS X gadget!
 	gtk_main();
 	return start_clicked;
 }
