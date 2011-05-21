@@ -29,6 +29,7 @@
 #include <net/if_arp.h>
 
 #include <igemacintegration/gtkosxapplication.h>
+#include <CoreFoundation/CoreFoundation.h>
 
 #ifdef HAVE_GNOMEUI
 #include <gnome.h>
@@ -1733,6 +1734,29 @@ static void sigchld_handler(int sig, siginfo_t *sip, void *)
 	}
 }
 
+/* Try to find BasiliskII.app within the given directory.
+   If found, set g_app_path appropriately, and return true.
+   Releases the argument dir. */
+int set_app_path(CFURLRef dir) {
+	if (!dir)
+		return 0;
+	CFURLRef path = CFURLCreateCopyAppendingPathComponent(NULL, dir,
+		CFSTR("BasiliskII.app"), TRUE);
+	CFRelease(dir);
+	CFBundleRef bundle = CFBundleCreate(NULL, path);
+	CFRelease(path);
+	if (!bundle)
+		return 0;
+	CFURLRef exe = CFBundleCopyExecutableURL(bundle);
+	CFRelease(bundle);
+	CFShow(exe);
+	if (!exe)
+		return 0;
+	Boolean ok = CFURLGetFileSystemRepresentation(exe, true,
+		(UInt8*)g_app_path, sizeof(g_app_path));
+	CFRelease(exe);
+	return ok;
+}
 
 /*
  *  Start standalone GUI
@@ -1778,20 +1802,23 @@ int main(int argc, char *argv[])
 		}
 
 		// Search and run the BasiliskII executable
-		char *p;
-		strcpy(g_app_path, argv[0]);
-		if ((p = strstr(g_app_path, "BasiliskIIGUI.app/Contents/MacOS")) != NULL) {
-		    strcpy(p, "BasiliskII.app/Contents/MacOS/BasiliskII");
-			if (access(g_app_path, X_OK) < 0) {
-				char str[256];
-				sprintf(str, GetString(STR_NO_B2_EXE_FOUND), g_app_path, strerror(errno));
-				WarningAlert(str);
-				strcpy(g_app_path, "/Applications/BasiliskII.app/Contents/MacOS/BasiliskII");
-			}
-		} else {
-			p = strrchr(g_app_path, '/');
-			p = p ? p + 1 : g_app_path;
-			strcpy(p, "BasiliskII");
+		int found = 0;
+		CFBundleRef me = CFBundleGetMainBundle();
+		if (me) { // Is it sitting next to us?
+			CFURLRef path = CFBundleCopyBundleURL(me);
+			CFURLRef parent = CFURLCreateCopyDeletingLastPathComponent(
+				NULL, path);
+			CFRelease(path);
+			found = set_app_path(parent);
+		}
+		if (!found) { // What about in /Applications?
+			CFURLRef apps = CFURLCreateWithFileSystemPath(NULL,
+				CFSTR("/Applications"), kCFURLPOSIXPathStyle, TRUE);
+			found = set_app_path(apps);
+		}
+		if (!found) { // Fall back to a nice name for the error dialog
+			strlcpy(g_app_path, "BasiliskII", sizeof(g_app_path));
+			fprintf(stderr, "%s\n", g_app_path);
 		}
 
 		int pid = fork();
