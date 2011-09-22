@@ -28,5 +28,7 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>Controller</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>10.6.0</string>
 </dict>
 </plist>
