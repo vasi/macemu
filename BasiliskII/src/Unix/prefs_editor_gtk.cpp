@@ -957,8 +957,8 @@ static void tb_nosound(GtkWidget *widget)
 static void parse_graphics_prefs(void)
 {
 	display_type = DISPLAY_WINDOW;
-	dis_width = 512;
-	dis_height = 384;
+	dis_width = 800;
+	dis_height = 600;
 #ifdef ENABLE_FBDEV_DGA
 	fbdev_name[0] = 0;
 #endif

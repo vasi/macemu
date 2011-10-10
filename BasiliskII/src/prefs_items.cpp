@@ -82,8 +82,8 @@ void AddPrefsDefaults(void)
 	PrefsAddInt32("udpport", 6066);
 	PrefsAddInt32("bootdriver", 0);
 	PrefsAddInt32("bootdrive", 0);
-	PrefsAddInt32("ramsize", 8 * 1024 * 1024);
-	PrefsAddInt32("frameskip", 6);
+	PrefsAddInt32("ramsize", 64 * 1024 * 1024);
+	PrefsAddInt32("frameskip", 0);
 	PrefsAddInt32("modelid", 5);	// Mac IIci
 	PrefsAddInt32("cpu", 3);		// 68030
 	PrefsAddBool("fpu", false);
@@ -92,10 +92,10 @@ void AddPrefsDefaults(void)
 	PrefsAddBool("noclipconversion", false);
 	PrefsAddBool("nogui", false);
 	
-#if USE_JIT
+#if 1
 	// JIT compiler specific options
 	PrefsAddBool("jit", true);
-	PrefsAddBool("jitfpu", true);
+	PrefsAddBool("jitfpu", false);
 	PrefsAddBool("jitdebug", false);
 	PrefsAddInt32("jitcachesize", 8192);
 	PrefsAddBool("jitlazyflush", true);

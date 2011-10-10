@@ -88,7 +88,9 @@ void LoadPrefs(const char *vmdir)
 		fclose(f);
 
 	} else {
-
+        // HACK
+        PrefsReplaceString("ether", "slirp");
+        
 		// No prefs file, save defaults
 		SavePrefs();
 	}
@@ -117,7 +119,8 @@ void SavePrefs(void)
 void AddPlatformPrefsDefaults(void)
 {
 	PrefsAddBool("keycodes", false);
-	PrefsReplaceString("extfs", "/");
+	PrefsReplaceString("extfs", "Put an OS X path here to share it with Basilisk");
+	PrefsReplaceString("rom", "Put the path to your ROM file here");
 	PrefsReplaceInt32("mousewheelmode", 1);
 	PrefsReplaceInt32("mousewheellines", 3);
 #ifdef __linux__
