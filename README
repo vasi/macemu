@@ -1,0 +1,32 @@
+Building SheepShaver for Lion:
+
+- Dependencies
+	- SDL framework
+		- Download SDL.framework from http://libsdl.org , put it in
+		  /Library/Frameworks
+	- automake and autoconf
+		- Installable from MacPorts
+	- Apple's GCC 4.2 (non-LLVM)
+		- Get it from XCode 3 OR install apple-gcc42 from MacPorts
+	- A modern GCC
+		- install gcc47 from MacPorts
+
+- Configuring
+	- Generate configure files
+		$ NO_CONFIGURE=1 ./autogen.sh
+	- Set PIE (Position Independent Executables) off
+		- This is critically important, do not forget!
+		$ export MACOSX_DEPLOYMENT_TARGET=10.6
+	- Configure, with GCC 4.2
+		$ CC=gcc-4.2 CXX=g++-4.2 ./configure --enable-sdl-video \
+		  --enable-sdl-audio --enable-sdl-framework --disable-vosf --enable-jit
+
+- Building
+	- Build `dyngen` with a modern GCC
+		$ make obj &&  make DYNGEN_CC=g++-mp-4.7 dyngen
+	- Build everything else with Apple's GCC
+		$ make -j2
+	- Build the .app, ignoring GNU find
+		$ PATH=/usr/bin:/bin:/usr/sbin make SheepShaver_app
+	- If you want, build SheepShaverLauncher in src/MacOSX
+		- Use my launcher-xcode46 branch
