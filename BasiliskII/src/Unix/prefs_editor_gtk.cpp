@@ -28,7 +28,7 @@
 #include <net/if.h>
 #include <net/if_arp.h>
 
-#include <igemacintegration/gtkosxapplication.h>
+#include <gtkmacintegration/gtkosxapplication.h>
 #include <CoreFoundation/CoreFoundation.h>
 
 #ifdef HAVE_GNOMEUI
@@ -532,14 +532,13 @@ bool PrefsEditor(void)
 	gtk_box_pack_start(GTK_BOX(box), menu_bar, FALSE, TRUE, 0);
 
 	// Use OS X menu bar
-	GtkOSXApplication *theApp = (GtkOSXApplication*)g_object_new(GTK_TYPE_OSX_APPLICATION, NULL);
+	GtkosxApplication *theApp = (GtkosxApplication*)g_object_new(GTKOSX_TYPE_APPLICATION, NULL);
 	gtk_widget_hide(menu_bar);
-	gtk_osxapplication_set_menu_bar(theApp, GTK_MENU_SHELL(menu_bar));
-	gtk_osxapplication_set_use_quartz_accelerators(theApp, TRUE);
+	gtkosx_application_set_menu_bar(theApp, GTK_MENU_SHELL(menu_bar));
+	gtkosx_application_set_use_quartz_accelerators(theApp, TRUE);
 
-	GtkOSXApplicationMenuGroup *group = gtk_osxapplication_add_app_menu_group(theApp);
-	GtkMenuItem *about_item = (GtkMenuItem*)gtk_item_factory_get_item(item_factory, "/Help/About Basilisk II");
-    gtk_osxapplication_add_app_menu_item(theApp, group, GTK_MENU_ITEM(about_item));
+	GtkWidget *about_item = gtk_item_factory_get_item(item_factory, "/Help/About Basilisk II");
+	gtkosx_application_insert_app_menu_item(theApp, about_item, 1);
 
 	GtkWidget *notebook = gtk_notebook_new();
 	gtk_notebook_set_tab_pos(GTK_NOTEBOOK(notebook), GTK_POS_TOP);
@@ -566,7 +565,7 @@ bool PrefsEditor(void)
 
 	// Show window and enter main loop
 	gtk_widget_show(win);
-	gtk_osxapplication_ready(theApp); // Go, go OS X gadget!
+	gtkosx_application_ready(theApp); // Go, go OS X gadget!
 	gtk_main();
 	return start_clicked;
 }
