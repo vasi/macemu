@@ -68,7 +68,10 @@
 #include "debug.h"
 
 static disk_factory *disk_factories[] = {
-	disk_sparsebundle_factory,
+// FIXME:	disk_sparsebundle_factory,
+#if HAVE_FRAMEWORK_FOUNDATION && HAVE_FRAMEWORK_IOKIT
+	disk_hdiutil_factory,
+#endif
 #if defined(HAVE_LIBVHD)
 	disk_vhd_factory,
 #endif

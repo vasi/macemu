@@ -583,6 +583,7 @@ AC_CHECK_FRAMEWORK(CoreFoundation, [#include <CoreFoundation/CoreFoundation.h>])
 AC_CHECK_FRAMEWORK(CoreAudio, [#include <CoreAudio/CoreAudio.h>])
 AC_CHECK_FRAMEWORK(AudioUnit, [#include <AudioUnit/AudioUnit.h>])
 AC_CHECK_FRAMEWORK(AudioToolbox, [#include <AudioToolbox/AudioToolbox.h>])
+AC_CHECK_FRAMEWORK(Foundation, [])
 AC_CHECK_FRAMEWORK(AppKit, [])
 
 dnl Select system-dependant sources.
@@ -618,6 +619,9 @@ darwin*)
   fi
   if [[ "x$ac_cv_framework_IOKit" = "xyes" -a "x$ac_cv_framework_CoreFoundation" = "xyes" ]]; then
     EXTRASYSSRCS="$EXTRASYSSRCS ../MacOSX/sys_darwin.cpp"
+  fi
+  if [[ "x$ac_cv_framework_IOKit" = "xyes" -a "x$ac_cv_framework_Foundation" = "xyes" ]]; then
+    EXTRASYSSRCS="$EXTRASYSSRCS ../MacOSX/disk_hdiutil_macosx.mm"
   fi
   if [[ "x$ac_cv_framework_Carbon" = "xyes" ]]; then
     EXTFSSRC=../MacOSX/extfs_macosx.cpp

@@ -21,7 +21,8 @@
 #ifndef DISK_UNIX_H
 #define DISK_UNIX_H
 
-#include "sysdeps.h"
+#include "config.h"
+#include <sys/types.h>
 
 struct disk_generic {
 	disk_generic() { }
@@ -36,6 +37,7 @@ struct disk_generic {
 typedef disk_generic *(disk_factory)(const char *path, bool read_only);
 
 extern disk_factory disk_sparsebundle_factory;
+extern disk_factory disk_hdiutil_factory;
 extern disk_factory disk_vhd_factory;
 
 #endif
