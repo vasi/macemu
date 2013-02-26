@@ -23,3 +23,10 @@ Building an Intel-Mac-friendly BasiliskII GUI.
 	* Bundle it
 		* Change dir to src/MacOSX
 		* Run `ige-mac-bundler BasiliskIIGUI.bundle`
+
+* FIXME!
+	* GTK-OSX build docs are now here: https://live.gnome.org/GTK+/OSX/Building
+	* Recent XCode has only 10.7 SDK
+	* ige-mac-integration is now included in meta-gtk-osx-core
+	* ige-mac-bundler is now gtk-mac-bundler, doesn't need patch
+	* Build results in random crashes :(
