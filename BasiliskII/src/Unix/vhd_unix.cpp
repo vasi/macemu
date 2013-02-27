@@ -32,7 +32,8 @@ extern "C" {
 #define DEBUG 0
 #include "debug.h"
 
-static void *vhd_unix_open(const char *name, int *size, bool read_only)
+static void *vhd_unix_open(const char *name, int *size, bool read_only,
+	bool *recognized)
 {
 	int amode = read_only ? R_OK : (R_OK | W_OK);
 	int fid;
@@ -58,6 +59,7 @@ static void *vhd_unix_open(const char *name, int *size, bool read_only)
 			D(bug("vhd open -- not vhd magic = %s\n", buf));
 			return NULL;
 		}
+		*recognized = true;
 		if (vhd = (vhd_context_t *) malloc(sizeof(vhd_context_t))) {
 			int err;
 			if (err = vhd_open(vhd, name, read_only ? 
@@ -147,10 +149,14 @@ protected:
 	loff_t file_size;
 };
 
-disk_generic *disk_vhd_factory(const char *path, bool read_only) {
+disk_generic_status disk_vhd_factory(const char *path, bool read_only,
+		disk_generic **disk) {
 	int size;
-	vhd_context_t *ctx = (vhd_context_t*)vhd_unix_open(path, &size, read_only);
+	bool recognized = false;
+	vhd_context_t *ctx = (vhd_context_t*)vhd_unix_open(path, &size, read_only,
+		&recognized);
 	if (!ctx)
-		return NULL;
-	return new disk_vhd(ctx, read_only, size);
+		return recognized ? DISK_INVALID : DISK_UNKNOWN;
+	*disk = new disk_vhd(ctx, read_only, size);
+	return DISK_VALID;
 }

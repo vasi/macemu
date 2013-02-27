@@ -607,8 +607,11 @@ void *Sys_open(const char *name, bool read_only)
 
 
 	for (disk_factory **f = disk_factories; *f; ++f) {
-		disk_generic *generic = (*f)(name, read_only);
-		if (generic) {
+		disk_generic *generic;
+		disk_generic_status status = (*f)(name, read_only, &generic);
+		if (status == DISK_INVALID)
+			return NULL;
+		if (status == DISK_VALID) {
 			mac_file_handle *fh = open_filehandle(name);
 			fh->generic_disk = generic;
 			fh->file_size = generic->size();

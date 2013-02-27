@@ -34,7 +34,14 @@ struct disk_generic {
 	virtual loff_t size() = 0;
 };
 
-typedef disk_generic *(disk_factory)(const char *path, bool read_only);
+enum disk_generic_status {
+	DISK_UNKNOWN,
+	DISK_VALID,
+	DISK_INVALID,
+};
+
+typedef disk_generic_status (disk_factory)(const char *path, bool read_only,
+	disk_generic **disk);
 
 extern disk_factory disk_sparsebundle_factory;
 extern disk_factory disk_hdiutil_factory;

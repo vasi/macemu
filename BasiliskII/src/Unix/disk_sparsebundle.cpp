@@ -22,6 +22,7 @@
 #include "tinyxml2.h"
 
 #include <limits.h>
+#include <fcntl.h>
  
 // TODO
 // - Test on Linux
@@ -209,39 +210,40 @@ static int try_open(const char *path, bool read_only) {
 	return fd;
 }
 
-disk_generic *disk_sparsebundle_factory(const char *path, bool read_only) {
+disk_generic_status disk_sparsebundle_factory(const char *path, bool read_only,
+		disk_generic **disk) {
 	// Does it look like a sparsebundle?
 	char buf[PATH_MAX + 1];
 	if (snprintf(buf, PATH_MAX, "%s/%s", path, "Info.plist") >= PATH_MAX)
-		return NULL;
+		return DISK_UNKNOWN;
 	
 	plist pl;
 	if (!pl.open(buf))
-		return NULL;	
+		return DISK_UNKNOWN;
 	
 	const char *type;
 	if (!(type = pl.str_val("diskimage-bundle-type")))
-		return NULL;
+		return DISK_UNKNOWN;
 	if (strcmp(type, "com.apple.diskimage.sparsebundle") != 0)
-		return NULL;
+		return DISK_UNKNOWN;
 	
 	
 	// Find the sparsebundle parameters
 	loff_t version, band_size, total_size;
 	if (!pl.int_val("bundle-backingstore-version", &version) || version != 1) {
 		fprintf(stderr, "sparsebundle: Bad version\n");
-		return NULL;
+		return DISK_INVALID;
 	}
 	if (!pl.int_val("band-size", &band_size)
 			|| !pl.int_val("size", &total_size)) {
 		fprintf(stderr, "sparsebundle: Can't find size\n");
-		return NULL;
+		return DISK_INVALID;
 	}
 	
 	
 	// Check if we can open it
 	if (snprintf(buf, PATH_MAX, "%s/%s", path, "token") >= PATH_MAX)
-		return NULL;
+		return DISK_INVALID;
 	int token = try_open(buf, read_only);
 	if (token == -1 && !read_only) { // try again, read-only
 		read_only = true;
@@ -249,14 +251,15 @@ disk_generic *disk_sparsebundle_factory(const char *path, bool read_only) {
 	}
 	if (token == -1) {
 		fprintf(stderr, "sparsebundle: Can't open the bundle\n");
-		return NULL;
+		return DISK_INVALID;
 	}
 	
 	
 	// We're good to go!
 	if (snprintf(buf, PATH_MAX, "%s/%s", path, "bands") >= PATH_MAX)
-		return NULL;
+		return DISK_INVALID;
 	char *bands = strdup(buf);
-	return new disk_sparsebundle(bands, token, read_only, band_size,
+	*disk = new disk_sparsebundle(bands, token, read_only, band_size,
 		total_size);
+	return DISK_VALID;
 }

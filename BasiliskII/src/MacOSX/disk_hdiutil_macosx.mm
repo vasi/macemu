@@ -30,7 +30,7 @@
 // TODO
 // - Restore sparsebundle driver
 // - Test read-only
-// - Test locking
+// - Test locking; also do we check if already open?
 // - Test crashing
 // - Shadow disks
 
@@ -211,18 +211,19 @@ static bool image_info(NSString *dev, NSString **drive_id, bool *read_only,
 
 
 // Actual disk_hdiutil factory
-static disk_generic *factory_real(const char *path, bool read_only) {
+static disk_generic_status factory_real(const char *path, bool read_only,
+		disk_generic **disk) {
 	NSString *image = [NSString stringWithUTF8String: path];
 	NSArray *args = is_usable(image);
 	if (!args)
-		return NULL;
+		return DISK_UNKNOWN;
 	
 	NSString *dev = attach(args, read_only);
 	NSString *drive_id;
 	loff_t size;
 	if (!image_info(dev, &drive_id, &read_only, &size)) {
 		detach(dev);
-		return NULL;
+		return DISK_INVALID;
 	}
 	
 	int oflags = O_RDWR | O_EXLOCK;
@@ -231,17 +232,19 @@ static disk_generic *factory_real(const char *path, bool read_only) {
 	int fd = open([dev fileSystemRepresentation], oflags);
 	if (fd == -1) {
 		detach(dev);
-		return NULL;
+		return DISK_INVALID;
 	}
 	
 	// TODO: queue for cleanup
 	
-	return new disk_hdiutil(dev, fd, read_only, size);
+	*disk = new disk_hdiutil(dev, fd, read_only, size);
+	return DISK_VALID;
 }
 // Just an autorelease wrapper around factory_real()
-disk_generic *disk_hdiutil_factory(const char *path, bool read_only) {
+disk_generic_status disk_hdiutil_factory(const char *path, bool read_only,
+		disk_generic **disk) {
 	NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
-	disk_generic *ret = factory_real(path, read_only);	
+	disk_generic_status ret = factory_real(path, read_only, disk);
 	[pool release];
 	return ret;
 }
