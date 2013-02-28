@@ -28,9 +28,8 @@
 
 
 // TODO
+// - Check magic?
 // - Restore sparsebundle driver
-// - Test read-only
-// - Test locking; also do we check if already open?
 // - Test crashing
 // - Shadow disks
 
@@ -52,9 +51,12 @@ static NSString *attach(NSArray *image_args, bool read_only);
 // Detach a disk image
 static void detach(NSString *dev);
 
-// Do we want this image? If so, return appropriate arguments for attach(), 
-// otherwise, return NULL.
-static NSArray *is_usable(NSString *path);
+// Does this look like a bundled image?
+static bool is_bundle_image(NSString *path, NSString **lockfile);
+
+// Do we want this image?
+static disk_generic_status is_usable(NSString *path, NSArray **attach_args,
+	bool *shared);
 
 // Get information about a mounted image, return true on success.
 static bool image_info(NSString *dev, NSString **drive_id, bool *read_only,
@@ -65,12 +67,15 @@ static NSString *dev_name(NSString *dev);
 
 
 struct disk_hdiutil : disk_generic {
-	disk_hdiutil(NSString *dev, int fd, bool read_only, loff_t size)
-	: dev([dev retain]), fd(fd), read_only(read_only), total_size(size) { }
+	disk_hdiutil(NSString *dev, int fd, bool read_only, loff_t size,
+		bool shared)
+	: dev([dev retain]), fd(fd), read_only(read_only), total_size(size),
+		shared(shared) { }
 	
 	virtual ~disk_hdiutil() {
 		close(fd);
-		detach(dev);
+		if (!shared)
+			detach(dev);
 		[dev release];
 	}
 	
@@ -89,6 +94,7 @@ protected:
 	NSString *dev;
 	int fd;
 	bool read_only;
+	bool shared;
 	loff_t total_size;
 };
 
@@ -144,18 +150,50 @@ static void detach(NSString *dev) {
 	hdiutil([NSArray arrayWithObjects: @"detach", dev, nil]);
 }
 
-static NSArray *is_usable(NSString *path) {
+static bool is_bundle_image(NSString *path, NSString **lockfile) {
+	NSString *info = [path stringByAppendingPathComponent: @"Info.plist"];
+	NSData *data = [NSData dataWithContentsOfFile: info];
+	if (!data)
+		return false;
+	
+	NSString *error = NULL;
+	id plist = [NSPropertyListSerialization propertyListFromData: data
+		mutabilityOption: NSPropertyListImmutable format: NULL
+		errorDescription: &error];
+	if (!plist)
+		return false;
+	if (![plist valueForKeyPath: @"diskimage-bundle-type"])
+		return false;
+	
+	NSString *token = [path stringByAppendingPathComponent: @"token"];
+	if (lockfile && [[NSFileManager defaultManager] fileExistsAtPath: token])
+		*lockfile = token;
+	return true;
+}
+
+static disk_generic_status is_usable(NSString *path, NSArray **attach_args,
+		bool *shared) {
+	// Check for recognized formats
+	NSString *lockfile = path;
+	bool recognized = is_bundle_image(path, &lockfile);
+	
 	// This checks both the format, and whether the disk is locked or in-use
 	id plist = hdiutil([NSArray arrayWithObjects:
 		@"imageinfo", @"-format", @"-plist", path, nil]);
 	if (!plist)
-		return nil;
+		return recognized ? DISK_INVALID : DISK_UNKNOWN;
 	if ([plist isEqual: ImageTypeRaw]) // Better handled as a regular file
-		return nil;
+		return DISK_UNKNOWN;
 	
 	// TODO: support shadow files
+	*attach_args = [NSArray arrayWithObject: path];
 	
-	return [NSArray arrayWithObject: path];
+	// Check if it's shared
+	int fd = open([lockfile UTF8String], O_EXLOCK | O_NONBLOCK);
+	close(fd);
+	*shared = (fd == -1);
+	
+	return DISK_VALID;
 }
 
 static NSString *dev_name(NSString *dev) {
@@ -213,11 +251,15 @@ static bool image_info(NSString *dev, NSString **drive_id, bool *read_only,
 // Actual disk_hdiutil factory
 static disk_generic_status factory_real(const char *path, bool read_only,
 		disk_generic **disk) {
+	// See if we want this image
 	NSString *image = [NSString stringWithUTF8String: path];
-	NSArray *args = is_usable(image);
-	if (!args)
-		return DISK_UNKNOWN;
+	bool shared = false;
+	NSArray *args;
+	disk_generic_status status = is_usable(image, &args, &shared);
+	if (status != DISK_VALID)
+		return status;
 	
+	// Attach ithe image
 	NSString *dev = attach(args, read_only);
 	NSString *drive_id;
 	loff_t size;
@@ -226,6 +268,7 @@ static disk_generic_status factory_real(const char *path, bool read_only,
 		return DISK_INVALID;
 	}
 	
+	// Open the disk
 	int oflags = O_RDWR | O_EXLOCK;
 	if (read_only)
 		oflags = O_RDONLY | O_SHLOCK;
@@ -237,7 +280,7 @@ static disk_generic_status factory_real(const char *path, bool read_only,
 	
 	// TODO: queue for cleanup
 	
-	*disk = new disk_hdiutil(dev, fd, read_only, size);
+	*disk = new disk_hdiutil(dev, fd, read_only, size, shared);
 	return DISK_VALID;
 }
 // Just an autorelease wrapper around factory_real()
