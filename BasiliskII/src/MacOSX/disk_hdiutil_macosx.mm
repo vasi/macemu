@@ -20,10 +20,12 @@
 
 #include "disk_unix.h"
 
-#include <paths.h> // for _PATH_DEV
+#include <paths.h> // _PATH_DEV
+#include <sys/param.h> // MAX
 
 #import <Foundation/Foundation.h>
 #import <IOKit/IOKitLib.h>
+#import <IOKit/IOBSD.h>
 #import <IOKit/storage/IOMedia.h>
 
 
@@ -39,23 +41,32 @@ static const CFStringRef DriveIdentifierKey =
 	 CFSTR("hdiagent-drive-identifier");
 
 // Key to indicate that a bundle is a disk image
-static const NSString *ImageBundleKey = @"diskimage-bundle-type";
+static NSString *ImageBundleKey = @"diskimage-bundle-type";
 
 // Raw disk image identifier
-static const NSString *ImageTypeRaw = @"RAW*";
+static NSString *ImageTypeRaw = @"RAW*";
 
 // Path to hdiutil
 static const char *HdiutilPath = "/usr/bin/hdiutil";
 
+
+// Pipe to communicate with cleanup process
+static int cleanup_fd = -1;
+
+
+extern "C" {
+// Detach a disk image
+void hdiutil_detach(NSString *dev);
+
+// Find the device corresponding to a unique drive ID
+NSString *hdiutil_find_attached(NSString *drive_id);
+}
 
 // Run hdiutil and return the plist output, or NULL on failure.
 static id hdiutil(NSArray *args);
 
 // Attach a disk image, returning the full dev path, or NULL on failure.
 static NSString *attach(NSArray *image_args, bool read_only);
-
-// Detach a disk image
-static void detach(NSString *dev);
 
 // Does this look like a bundled image?
 // SheepShaver's default raw file disk implementation will deal ok with a
@@ -76,17 +87,21 @@ static bool image_info(NSString *dev, NSString **drive_id, bool *read_only,
 // Get just the device name (BSD name) part of a device path: /dev/foo => foo
 static NSString *dev_name(NSString *dev);
 
+// Ensure a disk is unmounted cleanly, even if we crash
+static void queue_for_cleanup(NSString *drive_id);
+
+
 
 struct disk_hdiutil : disk_generic {
 	disk_hdiutil(NSString *dev, int fd, bool read_only, loff_t size,
 		bool shared)
-	: dev([dev retain]), fd(fd), read_only(read_only), total_size(size),
-		shared(shared) { }
+	: dev([dev retain]), fd(fd), read_only(read_only), shared(shared),
+		total_size(size) { }
 	
 	virtual ~disk_hdiutil() {
 		close(fd);
 		if (!shared)
-			detach(dev);
+			hdiutil_detach(dev);
 		[dev release];
 	}
 	
@@ -157,7 +172,7 @@ static NSString *attach(NSArray *image_args, bool read_only) {
 	return dev;
 }
 
-static void detach(NSString *dev) {
+void hdiutil_detach(NSString *dev) {
 	hdiutil([NSArray arrayWithObjects: @"detach", dev, nil]);
 }
 
@@ -202,7 +217,7 @@ static disk_generic_status is_usable(NSString *path, NSArray **attach_args,
 	*attach_args = [NSArray arrayWithObject: path];
 	
 	// Check if it's shared
-	int fd = open([lockfile UTF8String], O_EXLOCK | O_NONBLOCK);
+	int fd = open([lockfile UTF8String], O_EXLOCK | O_NONBLOCK | O_CLOEXEC);
 	close(fd);
 	*shared = (fd == -1);
 	
@@ -260,6 +275,54 @@ static bool image_info(NSString *dev, NSString **drive_id, bool *read_only,
 	return ok && drive;
 }
 
+static void queue_for_cleanup(NSString *drive_id) {	
+	// Start up the cleanup process
+	if (cleanup_fd == -1) {
+		int fds[2];
+		if (pipe(fds) != 0)
+			return;
+		int rd = fds[0], wr = fds[1];
+		
+		pid_t pid = fork();
+		if (pid == -1) {
+			close(rd);
+			close(wr);
+			return;
+		} else if (pid == 0) {	// child
+			dup2(rd, STDIN_FILENO);
+			execl("./cleanup", "./cleanup", NULL);
+		}
+		
+		// Parent
+		close(rd);
+		cleanup_fd = wr;
+	}
+	
+	const char *d = [drive_id UTF8String];
+	write(cleanup_fd, d, strlen(d) + 1);
+}
+
+NSString *hdiutil_find_attached(NSString *drive_id) {
+	// Create a matching dictionary to find this unique drive ID in the
+	// IO Registry.
+	NSDictionary *prop = [NSDictionary dictionaryWithObject: drive_id
+		forKey: (NSString*)DriveIdentifierKey];
+	NSDictionary *match = [[NSDictionary alloc] initWithObjectsAndKeys: prop,
+		(NSString*)CFSTR(kIOPropertyMatchKey), nil];
+	
+	// See if the IO Registry entry exists
+	io_service_t serv = IOServiceGetMatchingService(kIOMasterPortDefault,
+		(CFDictionaryRef)match);
+	if (!serv)
+		return nil;
+	
+	// Find the related BSD name, so we can detach it
+	NSString *dev = (NSString*)IORegistryEntrySearchCFProperty(serv,
+		kIOServicePlane, CFSTR(kIOBSDNameKey), NULL,
+		kIORegistryIterateRecursively);
+	IOObjectRelease(serv);
+	return dev;
+}
 
 // Actual disk_hdiutil factory
 static disk_generic_status factory_real(const char *path, bool read_only,
@@ -277,7 +340,7 @@ static disk_generic_status factory_real(const char *path, bool read_only,
 	NSString *drive_id;
 	loff_t size;
 	if (!image_info(dev, &drive_id, &read_only, &size)) {
-		detach(dev);
+		hdiutil_detach(dev);
 		return DISK_INVALID;
 	}
 	
@@ -285,13 +348,15 @@ static disk_generic_status factory_real(const char *path, bool read_only,
 	int oflags = O_RDWR | O_EXLOCK;
 	if (read_only)
 		oflags = O_RDONLY | O_SHLOCK;
-	int fd = open([dev fileSystemRepresentation], oflags);
+	int fd = open([dev fileSystemRepresentation], oflags | O_CLOEXEC);
 	if (fd == -1) {
-		detach(dev);
+		hdiutil_detach(dev);
 		return DISK_INVALID;
 	}
 	
-	// TODO: queue for cleanup
+	// Make sure we clean up after a crash
+	if (!shared)
+		queue_for_cleanup(drive_id);
 	
 	*disk = new disk_hdiutil(dev, fd, read_only, size, shared);
 	return DISK_VALID;
