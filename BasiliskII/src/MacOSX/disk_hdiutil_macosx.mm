@@ -34,12 +34,18 @@
 // - Shadow disks
 
 
-// Unique ID of an attached image
+// Key in IORegistry for unique of an attached image
 static const CFStringRef DriveIdentifierKey =
 	 CFSTR("hdiagent-drive-identifier");
 
-// Raw disk image
+// Key to indicate that a bundle is a disk image
+static const NSString *ImageBundleKey = @"diskimage-bundle-type";
+
+// Raw disk image identifier
 static const NSString *ImageTypeRaw = @"RAW*";
+
+// Path to hdiutil
+static const char *HdiutilPath = "/usr/bin/hdiutil";
 
 
 // Run hdiutil and return the plist output, or NULL on failure.
@@ -52,13 +58,18 @@ static NSString *attach(NSArray *image_args, bool read_only);
 static void detach(NSString *dev);
 
 // Does this look like a bundled image?
+// SheepShaver's default raw file disk implementation will deal ok with a
+// locked file, but not a locked bundle. We have to claim them as our own,
+// and refuse to mount them.
 static bool is_bundle_image(NSString *path, NSString **lockfile);
 
-// Do we want this image?
+// Is this an image we can use? Return whether it's shared (mounted by someone
+// else), and what arguments to use for mounting it.
 static disk_generic_status is_usable(NSString *path, NSArray **attach_args,
 	bool *shared);
 
-// Get information about a mounted image, return true on success.
+// Get information about a mounted image from the IO registry,
+// return true on success.
 static bool image_info(NSString *dev, NSString **drive_id, bool *read_only,
 	loff_t *size);
 
@@ -102,7 +113,7 @@ protected:
 static id hdiutil(NSArray *args) {
 	// Setup the hdiutil process
 	NSTask *task = [[[NSTask alloc] init] autorelease];
-	[task setLaunchPath: @"/usr/bin/hdiutil"];
+	[task setLaunchPath: [NSString stringWithUTF8String: HdiutilPath]];
 	[task setArguments: args];
 	NSPipe *pipe = [NSPipe pipe];
 	[task setStandardOutput: pipe];
@@ -151,6 +162,7 @@ static void detach(NSString *dev) {
 }
 
 static bool is_bundle_image(NSString *path, NSString **lockfile) {
+	// Look for a plist, with the right key
 	NSString *info = [path stringByAppendingPathComponent: @"Info.plist"];
 	NSData *data = [NSData dataWithContentsOfFile: info];
 	if (!data)
@@ -162,9 +174,10 @@ static bool is_bundle_image(NSString *path, NSString **lockfile) {
 		errorDescription: &error];
 	if (!plist)
 		return false;
-	if (![plist valueForKeyPath: @"diskimage-bundle-type"])
+	if (![plist valueForKeyPath: ImageBundleKey])
 		return false;
 	
+	// Check for a lockfile
 	NSString *token = [path stringByAppendingPathComponent: @"token"];
 	if (lockfile && [[NSFileManager defaultManager] fileExistsAtPath: token])
 		*lockfile = token;
