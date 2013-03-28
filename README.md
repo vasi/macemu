@@ -31,4 +31,10 @@ NOTE: This has only been tested on Mac OS X 10.6 Snow Leopard. For some reason, 
 	* Force an i386 build: `export CC="gcc -arch i386" CXX="g++ -arch i386"` before configuring
 	* Configure with the addition option `--enable-sdl-framework`
 	* Build with `make LDFLAGS="-Wl,-rpath,@loader_path/../Frameworks" BasiliskII_app`
-	* Embed SDL: `mkdir BasiliskII.app/Contents/Frameworks; cp -R /Library/Frameworks/SDL.framework BasiliskII.app/Contents/Frameworks/; rm -r BasiliskII.app/Contents/Frameworks/SDL.framework/Versions/A/Headers`
+	* Embed SDL:
+
+        ```
+mkdir BasiliskII.app/Contents/Frameworks
+cp -R /Library/Frameworks/SDL.framework BasiliskII.app/Contents/Frameworks/
+rm -r BasiliskII.app/Contents/Frameworks/SDL.framework/Versions/A/Headers
+```
