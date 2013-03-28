@@ -17,10 +17,10 @@ NOTE: This has only been tested on Mac OS X 10.6 Snow Leopard. For some reason, 
 
 * Build BasiliskIIGUI
 	* Setup build environment by running `HOME=~gtk ~gtk/.local/bin/jhbuild shell`
-	* Change directory to src/Unix
+	* Change directory to BasiliskII/src/Unix
 	* Run autotools: `ACLOCAL_FLAGS="$ACLOCAL_FLAGS -I $PWD/m4" NO_CONFIGURE=1 ./autogen.sh`
 	* Configure: `./configure --enable-standalone-gui --disable-fbdev-dga`. Verify that Gtk2 is detected
 	* Build: `make BasiliskIIGUI`
 	* Bundle it
-		* Change dir to src/MacOSX
+		* Change dir to BasiliskII/src/MacOSX
 		* Run `gtk-mac-bundler BasiliskIIGUI.bundle`
