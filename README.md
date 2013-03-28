@@ -24,3 +24,11 @@ NOTE: This has only been tested on Mac OS X 10.6 Snow Leopard. For some reason, 
 	* Bundle it
 		* Change dir to BasiliskII/src/MacOSX
 		* Run `gtk-mac-bundler BasiliskIIGUI.bundle`
+
+* Building Basilisk.app
+	* Mostly according to E-Maculation's guide: http://www.emaculation.com/doku.php/compiling_sheepshaver_basilisk
+	* Use SDL 1.2.15 or later
+	* Force an i386 build: `export CC="gcc -arch i386" CXX="g++ -arch i386"` before configuring
+	* Configure with the addition option `--enable-sdl-framework`
+	* Build with `make LDFLAGS="-Wl,-rpath,@loader_path/../Frameworks" BasiliskII_app`
+	* Embed SDL: `mkdir BasiliskII.app/Contents/Frameworks; cp -R /Library/Frameworks/SDL.framework BasiliskII.app/Contents/Frameworks/; rm -r BasiliskII.app/Contents/Frameworks/SDL.framework/Versions/A/Headers`
