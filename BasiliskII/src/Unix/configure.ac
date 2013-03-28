@@ -348,7 +348,7 @@ case "x$WANT_GTK" in
 xgtk2*)
   AM_PATH_GTK_2_0(1.3.15, [
     GUI_CFLAGS="$GTK_CFLAGS"
-    GUI_LIBS="$GTK_LIBS"
+    GUI_LIBS="$GTK_LIBS -lgtkmacintegration -framework CoreFoundation"
     WANT_GTK=gtk2
   ], [
     case "x${WANT_GTK}x" in
