@@ -60,6 +60,12 @@
   <binary>
      ${prefix}/lib/${gtkdir}/modules/*.so
   </binary>
+  <binary>
+    ${prefix}/lib/gdk-pixbuf-2.0/${pkg:${gtk}:gtk_binary_version}/*.so
+  </binary>
+  <binary>
+	 ${prefix}/lib/pango/${pkg:pango:pango_module_version}/modules/
+  </binary>
 
   <!-- Copy in GTK+ theme engines and print backends. Note the use of the
        "${pkg:module:variable}" macro, which evaluates to a pkg-config
