@@ -117,7 +117,7 @@ static bool open_sdl_audio(void)
 	main_open_sdl_stream = stream;
 	silence_byte = SDL_GetSilenceValueForFormat(audio_spec.format);
 #if defined(BINCUE)
-	OpenAudio_bincue(audio_spec.freq, audio_spec.format, audio_spec.channels, silence_byte, get_audio_volume());
+	OpenAudio_bincue(audio_spec.freq, audio_spec.format, audio_spec.channels, silence_byte, (int)(get_audio_volume()*128));
 #endif
 
 	printf("Using SDL/%s audio output\n", SDL_GetCurrentAudioDriver());
