@@ -182,6 +182,9 @@ void AudioInit(void)
 static void close_audio(void)
 {
 	// Close audio device
+#if defined(BINCUE)
+	CloseAudio_bincue();
+#endif
 	SDL_CloseAudio();
 	free(audio_mix_buf);
 	audio_mix_buf = NULL;

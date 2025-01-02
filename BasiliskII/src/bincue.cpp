@@ -41,7 +41,7 @@
 #include <sys/stat.h>
 #include <errno.h>
 
-#include <vector>
+#include <list>
 
 #ifdef OSX_CORE_AUDIO
 #include "../MacOSX/MacOSX_sound_if.h"
@@ -145,20 +145,31 @@ typedef struct {
 static unsigned int totalPregap;
 static unsigned int prestart;
 
+// Current audio output settings
+
+struct OutputSettings {
+	int freq;
+	int format; // SDL format
+	int channels;
+	int default_cd_player_volume;
+};
+
+static bool have_current_output_settings = false;
+static OutputSettings current_output_settings;
+
 // Audio System Variables
 
 static uint8 silence_byte;
 
+// CD Player state; multiple players supported through list
 
-// CD Player state; multiple players supported through vectors
-
-std::vector<CDPlayer*> players;
+std::list<CDPlayer*> players;
 
 CDPlayer* currently_playing = NULL;
 
 CDPlayer* CSToPlayer(CueSheet* cs)
 {
-	for (std::vector<CDPlayer*>::iterator it = players.begin(); it != players.end(); ++it)
+	for (std::list<CDPlayer*>::iterator it = players.begin(); it != players.end(); ++it)
 		if (cs == (*it)->cs) // look for cuesheet matching existing player
 			return *it;
 	return NULL; // if no player with the cuesheet found, return null player
@@ -478,6 +489,10 @@ static bool LoadCueSheet(const char *cuefile, CueSheet *cs)
 	return false;
 }
 
+#ifdef USE_SDL_AUDIO
+	static void OpenPlayerStream(CDPlayer * player);
+	static void ClosePlayerStream(CDPlayer * player);
+#endif
 
 
 void *open_bincue(const char *name)
@@ -502,10 +517,14 @@ void *open_bincue(const char *name)
 		else
 			player->audiostatus = CDROM_AUDIO_INVALID;
 		player->audiofh = dup(cs->binfh);
-		
+
+#ifdef USE_SDL_AUDIO
+		OpenPlayerStream(player);
+#endif
+
 		// add to list of available CD players
 		players.push_back(player);
-		
+
 		return cs;
 	}
 	else
@@ -518,15 +537,18 @@ void close_bincue(void *fh)
 {
 	CueSheet *cs = (CueSheet *) fh;
 	CDPlayer *player = CSToPlayer(cs);
-	
+
+	if (player == currently_playing) {
+		CDStop_bincue(fh);
+		assert(currently_playing == NULL);
+	}
+
+	players.remove(player);
+
 	if (cs && player) {
 		free(cs);
 #ifdef USE_SDL_AUDIO
-#if !SDL_VERSION_ATLEAST(3, 0, 0)
-#define SDL_DestroyAudioStream	SDL_FreeAudioStream
-#endif
-		if (player->stream) // if audiostream has been opened, free it as well
-			SDL_DestroyAudioStream(player->stream);
+		ClosePlayerStream(player);
 #endif
 		free(player);
 	}
@@ -991,31 +1013,63 @@ void MixAudio_bincue(uint8 *stream, int stream_len, int volume)
 	}
 }
 
+static void OpenPlayerStream(CDPlayer * player) {
+	if (!have_current_output_settings) {
+		player->stream = NULL;
+		return;
+	}
+	OutputSettings & o = current_output_settings;
+
+	// set player volume based on SDL volume
+	player->volume_left = player->volume_right = player->volume_mono = o.default_cd_player_volume;
+	// audio stream handles converting cd audio to destination output
+	D(bug("Opening player stream\n"))
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+	SDL_AudioSpec src = { SDL_AUDIO_S16LE, 2, 44100 }, dst = { (SDL_AudioFormat)o.format, o.channels, o.freq };
+	player->stream = SDL_CreateAudioStream(&src, &dst);
+#else
+	player->stream = SDL_NewAudioStream(AUDIO_S16LSB, 2, 44100, o.format, o.channels, o.freq);
+#endif
+	if (player->stream == NULL) {
+		D(bug("Failed to open CD player audio stream using SDL!\n"));
+	}
+	else {
+		player->audio_enabled = true;
+	}
+}
+
+static void ClosePlayerStream(CDPlayer * player)
+{
+#if !SDL_VERSION_ATLEAST(3, 0, 0)
+#define SDL_DestroyAudioStream	SDL_FreeAudioStream
+#endif
+	if (player->stream) // if audiostream has been opened, free it as well
+		SDL_DestroyAudioStream(player->stream);
+	player->stream = NULL;
+}
+
 void OpenAudio_bincue(int freq, int format, int channels, uint8 silence, int volume)
 {
+	// save output audio params
+	current_output_settings = (OutputSettings){freq, format, channels, volume};
+	have_current_output_settings = true;
 	// setup silence at init
 	silence_byte = silence;
-	
-	// init players
-	for (std::vector<CDPlayer*>::iterator it = players.begin(); it != players.end(); ++it)
+
+	// init players for these settings
+	for (std::list<CDPlayer*>::iterator it = players.begin(); it != players.end(); ++it)
 	{
 		CDPlayer *player = *it;
-		
-		// set player volume based on SDL volume
-		player->volume_left = player->volume_right = player->volume_mono = volume;
-		// audio stream handles converting cd audio to destination output
-#if SDL_VERSION_ATLEAST(3, 0, 0)
-		SDL_AudioSpec src = { SDL_AUDIO_S16LE, 2, 44100 }, dst = { (SDL_AudioFormat)format, channels, freq };
-		player->stream = SDL_CreateAudioStream(&src, &dst);
-#else
-		player->stream = SDL_NewAudioStream(AUDIO_S16LSB, 2, 44100, format, channels, freq);
-#endif
-		if (player->stream == NULL) {
-			D(bug("Failed to open CD player audio stream using SDL!"));
-		}
-		else {
-			player->audio_enabled = true;
-		}
+		OpenPlayerStream(player);
+	}
+}
+
+void CloseAudio_bincue() {
+	have_current_output_settings = false;
+	for (std::list<CDPlayer*>::iterator it = players.begin(); it != players.end(); ++it)
+	{
+		CDPlayer *player = *it;
+		ClosePlayerStream(player);
 	}
 }
 #endif
@@ -1023,7 +1077,7 @@ void OpenAudio_bincue(int freq, int format, int channels, uint8 silence, int vol
 #ifdef OSX_CORE_AUDIO
 static int bincue_core_audio_callback(void)
 {
-	for (std::vector<CDPlayer*>::iterator it = players.begin(); it != players.end(); ++it)
+	for (std::list<CDPlayer*>::iterator it = players.begin(); it != players.end(); ++it)
 	{
 		CDPlayer *player = *it;
 		
