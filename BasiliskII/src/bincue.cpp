@@ -126,6 +126,8 @@ typedef struct CDPlayer {
 	uint8 volume_mono;			// CD player single-channel volume
 	loff_t fileoffset;			// offset from file beginning to audiostart
 	bool audio_enabled = false; // audio initialized for this player?
+	bool scanning = false;      // is there currently scanning in progress
+	int reverse;                // for scanning, 0=forward, 1=reverse
 #ifdef OSX_CORE_AUDIO
 	OSXsoundOutput soundoutput;
 #endif
@@ -713,6 +715,7 @@ bool CDPause_bincue(void *fh)
 		// Pause another player if needed
 		CDPause_playing(player);
 
+		player->scanning = false;
 		// doesn't matter if it was playing, just ensure it's now paused
 		player->audiostatus = CDROM_AUDIO_PAUSED;
 		currently_playing = NULL;
@@ -750,6 +753,7 @@ bool CDResume_bincue(void *fh)
 	if (cs && player) {
 		// Pause another player if needed
 		CDPause_playing(player);
+		player->scanning = false;
 
 		// doesn't matter if it was paused, just ensure this one plays now
 		player->audiostatus = CDROM_AUDIO_PLAY;
@@ -757,6 +761,23 @@ bool CDResume_bincue(void *fh)
 		return true;
 	}
 	return false;
+}
+
+bool static PreparePlayOrScanAudio(CDPlayer *player) {
+	if (player->audio_enabled) {
+		player->audiostatus = CDROM_AUDIO_PLAY;
+#ifdef OSX_CORE_AUDIO
+		D(bug("starting os x sound\n"));
+		player->soundoutput.setCallback(bincue_core_audio_callback);
+		// should be from current track !
+		player->soundoutput.start(16, 2, 44100);
+#endif
+		currently_playing = player;
+		return true;
+	} else {
+		D(bug("play but player audio not enabled\n"));
+		return false;
+	}
 }
 
 bool CDPlay_bincue(void *fh, uint8 start_m, uint8 start_s, uint8 start_f,
@@ -768,6 +789,7 @@ bool CDPlay_bincue(void *fh, uint8 start_m, uint8 start_s, uint8 start_f,
 	if (cs && player) {
 		// Pause another player if needed
 		CDPause_playing(player);
+		player->scanning = false;
 
 		int track;
 		MSF msf;
@@ -778,11 +800,18 @@ bool CDPlay_bincue(void *fh, uint8 start_m, uint8 start_s, uint8 start_f,
 
 		player->audiostatus = CDROM_AUDIO_NO_STATUS;
 
-		player->audiostart = (start_m * 60 * CD_FRAMES) +
-			(start_s * CD_FRAMES) + start_f;
-		player->audioend	= (end_m * 60 * CD_FRAMES) + (end_s * CD_FRAMES) + end_f;
+		int cur_position_frames = (player->audioposition / cs->raw_sector_size) + player->audiostart;
+
+		player->audiostart = MSFToFrames((MSF){start_m, start_s, start_f});
+		player->audioend   = MSFToFrames((MSF){end_m, end_s, end_f});
 
 		track = PositionToTrack(player->cs, player->audiostart);
+
+		int cur_track = PositionToTrack(player->cs, cur_position_frames);
+		MSF cur_msf;
+		FramesToMSF(cur_position_frames, &cur_msf);
+		D(bug("Track position check: requested play start %d m %d s %d f == track %d, current pos %d m %d s %d f == track %d\n",
+			start_m, start_s, start_f, track, cur_msf.m, cur_msf.s, cur_msf.f, cur_track));
 
 		if (track < player->cs->tcnt) {
 			player->audioposition = 0;
@@ -821,17 +850,10 @@ bool CDPlay_bincue(void *fh, uint8 start_m, uint8 start_s, uint8 start_f,
 		SDL_UnlockAudio();
 #endif
 
-		if (player->audio_enabled) {
-			player->audiostatus = CDROM_AUDIO_PLAY;
-#ifdef OSX_CORE_AUDIO
-			D(bug("starting os x sound"));
-			player->soundoutput.setCallback(bincue_core_audio_callback);
-			// should be from current track !
-			player->soundoutput.start(16, 2, 44100);
-#endif
-			currently_playing = player;
+		if (PreparePlayOrScanAudio(player)) {
 			return true;
 		}
+
 	}
 	return false;
 }
@@ -841,23 +863,37 @@ bool CDScan_bincue(void *fh, uint8 start_m, uint8 start_s, uint8 start_f, bool r
 	CDPlayer *player = CSToPlayer(cs);
 	
 	if (cs && player) {
-		uint8 scanrate = 8; // 8x scan default but could use different value or make configurable
-		
-		MSF msf;
-		msf.m = start_m; msf.s = start_s; msf.f = start_f;
-		int current_frame = MSFToFrames(msf);
-		
-		if (reverse) {
-			msf.s -= scanrate;
-			int goto_frame = MSFToFrames(msf);
-			player->audioposition -= (current_frame - goto_frame) * player->cs->raw_sector_size;
+		int goto_frame = MSFToFrames((MSF){start_m, start_s, start_f});
+
+		int scan_starting_track = PositionToTrack(cs, goto_frame);
+		if (cs->tracks[scan_starting_track].tcf != AUDIO) {
+			D(bug(" scan starting from non-audio track\n"));
+			return false;
 		}
-		else {
-			msf.s += scanrate;
-			int goto_frame = MSFToFrames(msf);
-			player->audioposition += (goto_frame - current_frame) * player->cs->raw_sector_size;
+
+		/* Figure out the bounds of this audio region */
+		int first_audio_track = scan_starting_track;
+		int last_audio_track = scan_starting_track;
+
+		for (int track = scan_starting_track - 1; track >= 0               && cs->tracks[track].tcf == AUDIO; track--)
+			first_audio_track--;
+		for (int track = scan_starting_track + 1; track < player->cs->tcnt && cs->tracks[track].tcf == AUDIO; track++)
+			last_audio_track++;
+
+		player->audiostart = cs->tracks[first_audio_track].start;
+		player->fileoffset = cs->tracks[first_audio_track].fileoffset;
+		player->audioend = cs->tracks[last_audio_track].start + cs->tracks[last_audio_track].length;
+
+		player->silence = 0;
+
+		player->audioposition = (goto_frame - player->audiostart) * player->cs->raw_sector_size;
+		player->reverse = reverse;
+		player->scanning = true;
+
+
+		if (PreparePlayOrScanAudio(player)) {
+			return true;
 		}
-		return true;
 	}
     return false;
 }
@@ -908,43 +944,104 @@ static uint8 *fill_buffer(int stream_len, CDPlayer* player)
 	if (player->audiostatus == CDROM_AUDIO_PLAY) {
 		int remaining_silence = player->silence - player->audioposition;
 
-		if (player->audiostart + player->audioposition/player->cs->raw_sector_size
-			>= player->audioend) {
-			player->audiostatus = CDROM_AUDIO_COMPLETED;
-			return buf;
+		int current_read_bytes_limit = -1;
+		int full_read_bytes_limit = -1;
+		int jump_bytes_after = 0;
+
+		if (player->scanning) {
+			/* In a scan we alternate playing frames and jumping frames */
+
+			/* These values are from the "ATA Packet Interface for CD-ROMs"
+			   SCAN command's "Request to the implementer" */
+			int play_frames = 6;
+			int jump_frames = player->reverse? -150 : 190;
+
+			/* For testing, use some big values so you can tell what's going on: */
+			/*
+			int play_frames = 75*2;
+			int jump_frames = player->reverse? -75*5 : 75*5;
+			*/
+
+			/* Let's call one block of frames to play and one gap in the direction we're seeking a cycle */
+			int cycle_size_frames = std::abs(play_frames + jump_frames);
+
+			full_read_bytes_limit = play_frames * player->cs->raw_sector_size;
+			jump_bytes_after = jump_frames * player->cs->raw_sector_size;
+
+			/* Let's make the cycles aligned to audiostart for convenience.
+			   Handle where we are in the cycle */
+			int cycle_size_bytes = cycle_size_frames * player->cs->raw_sector_size;
+			int cycle_bytes_offset = player->audioposition % cycle_size_bytes;
+			if (cycle_bytes_offset < full_read_bytes_limit) {
+				// in a play block
+				current_read_bytes_limit = full_read_bytes_limit - cycle_bytes_offset;
+			} else {
+				// currently in a gap, move to the start of the next play block
+				int delta = - cycle_bytes_offset + full_read_bytes_limit + jump_bytes_after;
+				if ((int)player->audioposition + delta < 0) {
+					player->audiostatus = CDROM_AUDIO_COMPLETED;
+					return buf;
+				}
+				player->audioposition += delta;
+				current_read_bytes_limit = full_read_bytes_limit;
+			}
 		}
 
-		if (remaining_silence >= stream_len) {
-			player->audioposition += stream_len;
-			return buf;
-		}
+		int available;
+		do {
+			if (player->audiostart + player->audioposition/player->cs->raw_sector_size >= player->audioend) {
+				player->audiostatus = CDROM_AUDIO_COMPLETED;
+				return buf;
+			}
 
-		if (remaining_silence > 0) {
-			offset += remaining_silence;
-			player->audioposition += remaining_silence;
-		}
+			if (remaining_silence >= stream_len) {
+				player->audioposition += stream_len;
+				return buf;
+			}
 
-		int available = ((player->audioend - player->audiostart) *
-						 player->cs->raw_sector_size) - player->audioposition;
-		if (available > (stream_len - offset))
-			available = stream_len - offset;
+			if (remaining_silence > 0) {
+				offset += remaining_silence;
+				player->audioposition += remaining_silence;
+			}
 
-		if (lseek(player->audiofh,
-				  player->fileoffset + player->audioposition - player->silence,
-					  SEEK_SET) < 0)
-			return NULL;
+			available = ((player->audioend - player->audiostart) *
+						player->cs->raw_sector_size) - player->audioposition;
+			if (available > (stream_len - offset))
+				available = stream_len - offset;
 
-		if (available < 0) {
-			player->audioposition += available; // correct end !;
-			available = 0;
-		}
+			bool hit_read_limit = false;
+			if (current_read_bytes_limit != -1) {
+				if (available >= current_read_bytes_limit) {
+					available = current_read_bytes_limit;
+					hit_read_limit = true;
+				}
+			}
+			current_read_bytes_limit = full_read_bytes_limit;
 
-		ssize_t ret = 0;
-		if ((ret = read(player->audiofh, &buf[offset], available)) >= 0) {
-			player->audioposition += ret;
-			offset += ret;
-			available -= ret;
-		}
+			if (lseek(player->audiofh,
+					  player->fileoffset + player->audioposition - player->silence,
+						  SEEK_SET) < 0)
+				return NULL;
+
+			if (available < 0) {
+				player->audioposition += available; // correct end !;
+				available = 0;
+			}
+
+			ssize_t ret = 0;
+			if ((ret = read(player->audiofh, &buf[offset], available)) >= 0) {
+				player->audioposition += ret;
+				offset += ret;
+				available -= ret;
+			}
+
+			if ((int)player->audioposition + jump_bytes_after < 0) {
+				player->audiostatus = CDROM_AUDIO_COMPLETED;
+				return buf;
+			}
+			if (hit_read_limit)
+				player->audioposition += jump_bytes_after;
+		} while (player->scanning && offset < stream_len);
 
 		while (offset < stream_len) {
 			buf[offset++] = silence_byte;
@@ -965,25 +1062,34 @@ void MixAudio_bincue(uint8 *stream, int stream_len, int volume)
 		CDPlayer *player = currently_playing;
 		
 		if (player->audiostatus == CDROM_AUDIO_PLAY) {
+			//D(bug("MixAudio cd playing, player=0x%p\n", player));
 			uint8 *buf = fill_buffer(stream_len, player);
 #if SDL_VERSION_ATLEAST(3, 0, 0)
 			if (buf)
 				SDL_PutAudioStreamData(player->stream, buf, stream_len);
 			int avail = SDL_GetAudioStreamAvailable(player->stream);
 			if (avail >= stream_len) {
+				//D(bug("have bytes avail %d stream len %d\n", avail, stream_len));
 				extern SDL_AudioSpec audio_spec;
 				uint8 converted[stream_len];
 				SDL_GetAudioStreamData(player->stream, converted, stream_len);
-				SDL_MixAudio(stream, converted, audio_spec.format, stream_len, player->volume_mono);
+				float volume = (float)player->volume_mono/128;
+				// Apply 60% volume while scanning (ff/reverse)
+				if (player->scanning) volume *= 0.6;
+				SDL_MixAudio(stream, converted, audio_spec.format, stream_len, volume);
 			}
 #else
 			if (buf)
 				SDL_AudioStreamPut(player->stream, buf, stream_len);
 			int avail = SDL_AudioStreamAvailable(player->stream);
 			if (avail >= stream_len) {
+				//D(bug("have bytes avail %d stream len %d\n", avail, stream_len));
 				uint8 converted[stream_len];
 				SDL_AudioStreamGet(player->stream, converted, stream_len);
-				SDL_MixAudio(stream, converted, stream_len, player->volume_mono);
+				int volume = player->volume_mono;
+				// Apply 60% volume while scanning (ff/reverse)
+				if (player->scanning) volume = volume * 3 / 5;
+				SDL_MixAudio(stream, converted, stream_len, volume);
 			}
 #endif
 		}

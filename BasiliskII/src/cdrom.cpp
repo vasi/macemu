@@ -273,11 +273,13 @@ static bool position2msf(const cdrom_drive_info &info, uint16 postype, uint32 po
 			m = pos / (60 * 75);
 			s = (pos / 75) % 60;
 			f = pos % 75;
+			D(bug(" position2msf absolute frame %d -> %d m %d s %d f\n", pos, m, s, f));
 			return true;
 		case 1:
 			m = bcd2bin[(pos >> 16) & 0xff];
 			s = bcd2bin[(pos >> 8) & 0xff];
 			f = bcd2bin[pos & 0xff];
+			D(bug(" position2msf bcd msf 0x%06x -> %d m %d s %d f\n", pos, m, s, f));
 			return true;
 		case 2: {
 			uint8 track = bcd2bin[pos & 0xff];
@@ -288,15 +290,19 @@ static bool position2msf(const cdrom_drive_info &info, uint16 postype, uint32 po
 					m = info.toc[i+5];
 					s = info.toc[i+6];
 					f = info.toc[i+7];
+					D(bug(" position2msf toc entry #%d -> %d m %d s %d f\n", pos, m, s, f));
 					return true;
 				}
 			}
+			D(bug(" position2msf toc entry #%d, no such entry\n", pos));
 			return false;
 		}
 		default:
+			D(bug(" position2msf postype %d pos %d -> %d m %d s %d f\n", postype, pos, m, s, f));
 			return false;
 	}
 }
+
 
 
 /*
@@ -903,6 +909,7 @@ int16 CDROMControl(uint32 pb, uint32 dce)
 			
 			if (ReadMacInt16(pb + csParam) == 0 && ReadMacInt32(pb + csParam + 2) == 0) {
 				// Stop immediately
+				D(bug("  stop immediately vals %d %d %d\n", info->lead_out[0], info->lead_out[1], info->lead_out[2]));
 				if (!SysCDStop(info->fh, info->lead_out[0], info->lead_out[1], info->lead_out[2]))
 					return paramErr;
 			} else {
@@ -948,10 +955,14 @@ int16 CDROMControl(uint32 pb, uint32 dce)
 		}
 			
 		case 108: {		// AudioScan
-			if (ReadMacInt8(info->status + dsDiskInPlace) == 0)
+			D(bug("AudioScan\n"));
+			if (ReadMacInt8(info->status + dsDiskInPlace) == 0) {
+				D(bug(" offline\n"));
 				return offLinErr;
-			
-			if (!position2msf(*info, ReadMacInt16(pb + csParam), ReadMacInt32(pb + csParam + 2), false, info->start_at[0], info->start_at[1], info->start_at[2]))
+			}
+			uint16 postype = ReadMacInt16(pb + csParam);
+			uint32 pos = ReadMacInt32(pb + csParam + 2);
+			if (!position2msf(*info, postype, pos, false, info->start_at[0], info->start_at[1], info->start_at[2]))
 				return paramErr;
 			
 			if (!SysCDScan(info->fh, info->start_at[0], info->start_at[1], info->start_at[2], ReadMacInt16(pb + csParam + 6) != 0)) {
@@ -1009,6 +1020,7 @@ int16 CDROMControl(uint32 pb, uint32 dce)
 			return controlErr;
 			
 		case 125:		// SetPlayMode
+			D(bug("  SetPlayMode\n"));
 			// repeat flag (0 is off, 1 is on)
 			info->repeat = ReadMacInt8(pb + csParam);
 			// playmode (0 is normal, 1 is shuffle, 2 is program mode)
