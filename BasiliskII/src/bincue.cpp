@@ -821,7 +821,9 @@ bool CDPlay_bincue(void *fh, uint8 start_m, uint8 start_s, uint8 start_f,
 		SDL_UnlockAudio();
 #endif
 
-		if (player->audio_enabled) {
+		if (cs->tracks[track].tcf != AUDIO) {
+			D(bug("CDPlay_bincue: not playing data track %d!\n", track));
+		} else if (player->audio_enabled) {
 			player->audiostatus = CDROM_AUDIO_PLAY;
 #ifdef OSX_CORE_AUDIO
 			D(bug("starting os x sound"));
