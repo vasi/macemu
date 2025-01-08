@@ -42,6 +42,7 @@ extern void CDGetVol_bincue(void *, uint8 *, uint8 *);
 extern void OpenAudio_bincue(int, int, int, uint8, int);
 extern bool HaveAudioToMix_bincue(void);
 extern void MixAudio_bincue(uint8 *, int, int);
+extern void CloseAudio_bincue(void);
 #endif
 
 #endif
