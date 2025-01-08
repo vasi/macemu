@@ -117,7 +117,7 @@ static bool open_sdl_audio(void)
 	main_open_sdl_stream = stream;
 	silence_byte = SDL_GetSilenceValueForFormat(audio_spec.format);
 #if defined(BINCUE)
-	OpenAudio_bincue(audio_spec.freq, audio_spec.format, audio_spec.channels, silence_byte, get_audio_volume());
+	OpenAudio_bincue(audio_spec.freq, audio_spec.format, audio_spec.channels, silence_byte, (int)(get_audio_volume()*128));
 #endif
 
 	printf("Using SDL/%s audio output\n", SDL_GetCurrentAudioDriver());
@@ -299,6 +299,13 @@ static void SDLCALL stream_func(void *, SDL_AudioStream *stream, int stream_len,
 	if (bytes_available > stream_len) {
 		// push any extra bytes, up to the target number, right away
 		stream_len = std::min(bytes_available, target_queue_size);
+	} else if (bytes_available == 0) {
+#if defined(BINCUE)
+		if (HaveAudioToMix_bincue()) {
+			// we are driving the rate entirely on behalf of the CD audio
+			stream_len = target_queue_size;
+		}
+#endif
 	}
 
 	uint8 src[stream_len], dst[stream_len];
