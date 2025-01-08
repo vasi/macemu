@@ -299,6 +299,13 @@ static void SDLCALL stream_func(void *, SDL_AudioStream *stream, int stream_len,
 	if (bytes_available > stream_len) {
 		// push any extra bytes, up to the target number, right away
 		stream_len = std::min(bytes_available, target_queue_size);
+	} else if (bytes_available == 0) {
+#if defined(BINCUE)
+		if (HaveAudioToMix_bincue()) {
+			// we are driving the rate entirely on behalf of the CD audio
+			stream_len = target_queue_size;
+		}
+#endif
 	}
 
 	uint8 src[stream_len], dst[stream_len];

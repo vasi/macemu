@@ -958,6 +958,11 @@ static uint8 *fill_buffer(int stream_len, CDPlayer* player)
 
 
 #ifdef USE_SDL_AUDIO
+
+bool HaveAudioToMix_bincue() {
+	return currently_playing != NULL;
+}
+
 void MixAudio_bincue(uint8 *stream, int stream_len, int volume)
 {
 	if (currently_playing) {
