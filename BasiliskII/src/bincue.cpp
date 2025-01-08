@@ -538,14 +538,14 @@ void close_bincue(void *fh)
 	CueSheet *cs = (CueSheet *) fh;
 	CDPlayer *player = CSToPlayer(cs);
 
-	if (player == currently_playing) {
-		CDStop_bincue(fh);
-		assert(currently_playing == NULL);
-	}
-
-	players.remove(player);
-
 	if (cs && player) {
+		if (player == currently_playing) {
+			CDStop_bincue(fh);
+			assert(currently_playing == NULL);
+		}
+
+		players.remove(player);
+
 		free(cs);
 #ifdef USE_SDL_AUDIO
 		ClosePlayerStream(player);
