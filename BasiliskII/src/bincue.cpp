@@ -111,6 +111,7 @@ typedef struct {
 	int raw_sector_size;	// Raw bytes to read per sector
 	int cooked_sector_size; // Actual data bytes per sector (depends on Mode)
 	int header_size;		// Number of bytes used in header
+	int big_endian_audio;   // Expect raw audio samples in big-endian format
 } CueSheet;
 
 typedef struct CDPlayer {
@@ -279,6 +280,7 @@ static bool ParseCueSheet(FILE *fh, CueSheet *cs, const char *cuefile)
 	cs->raw_sector_size = 2352;
 	cs->cooked_sector_size = 2352;
 	cs->header_size = 0;
+	cs->big_endian_audio = false;
 
 	while (fgets(line, MAXLINE, fh) != NULL) {
 		Track *curr = &cs->tracks[cs->tcnt];
@@ -303,11 +305,13 @@ static bool ParseCueSheet(FILE *fh, CueSheet *cs, const char *cuefile)
 				}	
 				filename = strtok(NULL, "\"\t\n\r");
 				filetype = strtok(NULL, " \"\t\n\r");
-				if (strcmp("BINARY", filetype)) {
-					D(bug("Not binary file %s", filetype));
+				if (strcmp("BINARY", filetype) && strcmp("MOTOROLA", filetype)) {
+					D(bug("Not binary file %s\n", filetype));
 					goto fail;
 				}
 				else {
+					if (!strcmp("MOTOROLA", filetype))
+						cs->big_endian_audio = true;
 					char *tmp = strdup(cuefile);
 					char *b = dirname(tmp);
 					cs->binfile = (char *) malloc(strlen(b) + strlen(filename) + 2);
@@ -1032,10 +1036,12 @@ static void OpenPlayerStream(CDPlayer * player) {
 	// audio stream handles converting cd audio to destination output
 	D(bug("Opening player stream\n"))
 #if SDL_VERSION_ATLEAST(3, 0, 0)
-	SDL_AudioSpec src = { SDL_AUDIO_S16LE, 2, 44100 }, dst = { (SDL_AudioFormat)o.format, o.channels, o.freq };
+	SDL_AudioSpec src = { player->cs->big_endian_audio? SDL_AUDIO_S16BE : SDL_AUDIO_S16LE, 2, 44100 };
+	SDL_AudioSpec dst = { (SDL_AudioFormat)o.format, o.channels, o.freq };
 	player->stream = SDL_CreateAudioStream(&src, &dst);
 #else
-	player->stream = SDL_NewAudioStream(AUDIO_S16LSB, 2, 44100, o.format, o.channels, o.freq);
+	player->stream = SDL_NewAudioStream(player->cs->big_endian_audio? AUDIO_S16MSB : AUDIO_S16LSB, 2, 44100,
+										o.format, o.channels, o.freq);
 #endif
 	if (player->stream == NULL) {
 		D(bug("Failed to open CD player audio stream using SDL!\n"));
