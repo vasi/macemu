@@ -269,7 +269,7 @@ static void stream_func(void *arg, uint8 *stream, int stream_len)
 	}
 	
 #if defined(BINCUE)
-	MixAudio_bincue(stream, stream_len, get_audio_volume());
+	MixAudio_bincue(stream, stream_len);
 #endif
 	
 }

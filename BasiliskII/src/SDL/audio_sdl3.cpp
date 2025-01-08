@@ -401,7 +401,7 @@ static void SDLCALL stream_func(void *, SDL_AudioStream *stream, int stream_len,
 	//int r = SDL_GetAudioStreamFormat(stream, NULL, &audio_spec);// little endianが帰ってくる
 	SDL_MixAudio(dst, src, audio_spec.format, stream_len, get_audio_volume());
 #if defined(BINCUE)
-	MixAudio_bincue(dst, stream_len, get_audio_volume());
+	MixAudio_bincue(dst, stream_len);
 #endif
 	SDL_PutAudioStreamData(stream, dst, stream_len);
 }
