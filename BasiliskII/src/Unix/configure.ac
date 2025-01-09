@@ -596,7 +596,7 @@ fi
 
 dnl Checks for library functions.
 AC_CHECK_FUNCS(strdup strerror cfmakeraw)
-AC_CHECK_FUNCS(clock_gettime timer_create)
+AC_CHECK_FUNCS(clock_gettime clock_nanosleep timer_create)
 AC_CHECK_FUNCS(sigaction signal)
 AC_CHECK_FUNCS(mmap mprotect munmap)
 AC_CHECK_FUNCS(vm_allocate vm_deallocate vm_protect)
