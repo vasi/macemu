@@ -1088,41 +1088,53 @@ bool HaveAudioToMix_bincue() {
 	return currently_playing != NULL;
 }
 
-void MixAudio_bincue(uint8 *stream, int stream_len)
+void MixAudio_bincue(uint8 *stream, int dest_stream_len)
 {
+	if (!dest_stream_len) return;
+
 	if (currently_playing) {
-		
 		CDPlayer *player = currently_playing;
-		
+
+		OutputSettings & o = current_output_settings;
+
+		/** How many bytes do we need in terms of source data (CD audio)? */
+		int source_channels_sample = 44100 * 2 * 2;
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+		int dest_format_bytes = SDL_AUDIO_BYTESIZE((SDL_AudioFormat) o.format);
+#else
+		int dest_format_bytes = o.format == AUDIO_U8 ? 1 : 2;
+#endif
+		int dest_channels_sample = o.freq * o.channels * dest_format_bytes;
+		int src_stream_len = (int)((uint64) dest_stream_len * source_channels_sample / dest_channels_sample);
+
 		if (player->audiostatus == CDROM_AUDIO_PLAY) {
 			//D(bug("MixAudio cd playing, player=0x%p\n", player));
-			uint8 *buf = fill_buffer(stream_len, player);
+			uint8 *buf = fill_buffer(src_stream_len, player);
 #if SDL_VERSION_ATLEAST(3, 0, 0)
 			if (buf)
-				SDL_PutAudioStreamData(player->stream, buf, stream_len);
+				SDL_PutAudioStreamData(player->stream, buf, src_stream_len);
 			int avail = SDL_GetAudioStreamAvailable(player->stream);
-			if (avail >= stream_len) {
-				//D(bug("have bytes avail %d stream len %d\n", avail, stream_len));
-				extern SDL_AudioSpec audio_spec;
-				uint8 converted[stream_len];
-				SDL_GetAudioStreamData(player->stream, converted, stream_len);
+			if (avail >= dest_stream_len) {
+				//D(bug("have bytes avail %d stream len %d\n", avail, dest_stream_len));
+				uint8 converted[dest_stream_len];
+				SDL_GetAudioStreamData(player->stream, converted, dest_stream_len);
 				float volume = (float)player->volume_mono/128;
 				// Apply 60% volume while scanning (ff/reverse)
 				if (player->scanning) volume *= 0.6;
-				SDL_MixAudio(stream, converted, audio_spec.format, stream_len, volume);
+				SDL_MixAudio(stream, converted, (SDL_AudioFormat) o.format, dest_stream_len, volume);
 			}
 #else
 			if (buf)
-				SDL_AudioStreamPut(player->stream, buf, stream_len);
+				SDL_AudioStreamPut(player->stream, buf, src_stream_len);
 			int avail = SDL_AudioStreamAvailable(player->stream);
-			if (avail >= stream_len) {
-				//D(bug("have bytes avail %d stream len %d\n", avail, stream_len));
-				uint8 converted[stream_len];
-				SDL_AudioStreamGet(player->stream, converted, stream_len);
+			if (avail >= dest_stream_len) {
+				//D(bug("have bytes avail %d stream len %d\n", avail, dest_stream_len));
+				uint8 converted[dest_stream_len];
+				SDL_AudioStreamGet(player->stream, converted, dest_stream_len);
 				int volume = player->volume_mono;
 				// Apply 60% volume while scanning (ff/reverse)
 				if (player->scanning) volume = volume * 3 / 5;
-				SDL_MixAudio(stream, converted, stream_len, volume);
+				SDL_MixAudio(stream, converted, dest_stream_len, volume);
 			}
 #endif
 		}
@@ -1172,6 +1184,15 @@ void OpenAudio_bincue(int freq, int format, int channels, uint8 silence, int vol
 	// save output audio params
 	current_output_settings = (OutputSettings){freq, format, channels, volume};
 	have_current_output_settings = true;
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+	D(bug("OpenAudio_bincue freq %d format %s channels %d volume %d\n",
+		current_output_settings.freq, SDL_GetAudioFormatName((SDL_AudioFormat)current_output_settings.format),
+		current_output_settings.channels, current_output_settings.default_cd_player_volume));
+#else
+	D(bug("OpenAudio_bincue freq %d format %d channels %d volume %d\n",
+		current_output_settings.freq, current_output_settings.format,
+		current_output_settings.channels, current_output_settings.default_cd_player_volume));
+#endif
 	// setup silence at init
 	silence_byte = silence;
 
