@@ -156,8 +156,6 @@ struct cdrom_drive_info {
 typedef vector<cdrom_drive_info> drive_vec;
 static drive_vec drives;
 
-int last_drive_num; // track last drive called to support multiple audio CDs
-
 // Icon address (Mac address space, set by PatchROM())
 uint32 CDROMIconAddr;
 
@@ -174,10 +172,8 @@ static drive_vec::iterator get_drive_info(int num)
 {
 	drive_vec::iterator info, end = drives.end();
 	for (info = drives.begin(); info != end; ++info) {
-		if (info->num == num) {
-			last_drive_num = num;
+		if (info->num == num)
 			return info;
-		}
 	}
 	return info;
 }
@@ -328,12 +324,6 @@ void CDROMInit(void)
 	    drives.begin()->init_null = true;
 	}
 
-	if (!drives.empty()) { // set to first drive by default
-		last_drive_num = drives.begin()->num;
-	}
-	else {
-		last_drive_num = 0;
-	}
 }
 
 void CDROMDrop(const char *path) {
@@ -387,7 +377,6 @@ void CDROMRemount() {
 	for (std::map<int, void *>::iterator i = remount_map.begin(); i != remount_map.end(); ++i)
 		for (drive_vec::iterator info = drives.begin(); info != drives.end(); ++info)
 			if (info->num == i->first) {
-				last_drive_num = i->first;
 				info->fh = i->second;
 				break;
 			}
@@ -574,10 +563,7 @@ int16 CDROMControl(uint32 pb, uint32 dce)
 		if (drives.empty()) {
 			return nsDrvErr;
 		} else {
-			// Audio calls tend to end up without correct reference
-			// Real mac would just play first disc, but we can guess correct one from last data call
-			info = get_drive_info(last_drive_num);
-			if (info == drives.end()) return nsDrvErr;
+			info = drives.begin();	// This is needed for Apple's Audio CD program
 		}
 	}
 	
@@ -638,7 +624,7 @@ int16 CDROMControl(uint32 pb, uint32 dce)
 					break;
 				case FOURCC('i','n','t','f'):
 				case FOURCC('d','A','P','I'):
-					WriteMacInt32(pb + csParam + 4, FOURCC('a','t','p','i'));
+					WriteMacInt32(pb + csParam + 4, FOURCC('s','c','s','i'));
 					break;
 				case FOURCC('s','y','n','c'):
 					WriteMacInt32(pb + csParam + 4, 1); // true/false = sync/async
@@ -1075,7 +1061,7 @@ int16 CDROMStatus(uint32 pb, uint32 dce)
 					break;
 				case FOURCC('i','n','t','f'):	// Interface type
 //					WriteMacInt32(pb + csParam + 4, EMULATOR_ID_4);
-					WriteMacInt32(pb + csParam + 4, FOURCC('a','t','p','i'));
+					WriteMacInt32(pb + csParam + 4, FOURCC('s','c','s','i'));
 					break;
 				case FOURCC('s','y','n','c'):	// Only synchronous operation?
 					WriteMacInt32(pb + csParam + 4, 0x01000000);
@@ -1126,12 +1112,11 @@ int16 CDROMStatus(uint32 pb, uint32 dce)
 	
 	// Drive valid?
 	if (info == drives.end()) {
-		if (drives.empty()) {
+		if (drives.empty())
 			return nsDrvErr;
-		} else {
-			info = get_drive_info(last_drive_num);
-			if (info == drives.end()) return nsDrvErr;
-		}
+		else
+			info = drives.begin();  // This is needed for Apple's Audio CD program
+
 	}
 	
 	// Drive-specific codes
