@@ -166,8 +166,8 @@ static uint8 silence_byte;
 
 // CD Player state; multiple players supported through list
 
-std::list<CDPlayer*> players;
-
+static std::list<CDPlayer*> players;
+static pthread_mutex_t player_lock;
 CDPlayer* currently_playing = NULL;
 
 CDPlayer* CSToPlayer(CueSheet* cs)
@@ -509,6 +509,8 @@ void *open_bincue(const char *name)
 		return NULL;
 	}
 
+	pthread_mutex_init(&player_lock, NULL);
+
 	if (LoadCueSheet(name, cs)) {
 		CDPlayer *player = (CDPlayer *) malloc(sizeof(CDPlayer));
 		player->cs = cs;
@@ -558,6 +560,7 @@ void close_bincue(void *fh)
 #endif
 		free(player);
 	}
+	pthread_mutex_destroy(&player_lock);
 }
 
 /*
@@ -811,18 +814,16 @@ bool CDPlay_bincue(void *fh, uint8 start_m, uint8 start_s, uint8 start_f,
 {
 	CueSheet *cs = (CueSheet *) fh;
 	CDPlayer *player = CSToPlayer(cs);
-	
+	bool result = false;
 	if (cs && player) {
+		pthread_mutex_lock(&player_lock);
+
 		// Pause another player if needed
 		CDPause_playing(player);
 		player->scanning = false;
 
 		int track;
 		MSF msf;
-
-#if defined(USE_SDL_AUDIO) && !SDL_VERSION_ATLEAST(3, 0, 0)
-		SDL_LockAudio();
-#endif
 
 		player->audiostatus = CDROM_AUDIO_NO_STATUS;
 
@@ -872,18 +873,15 @@ bool CDPlay_bincue(void *fh, uint8 start_m, uint8 start_s, uint8 start_f,
 		else
 			D(bug("CDPlay_bincue: play beyond last track !\n"));
 
-#if defined(USE_SDL_AUDIO) && !SDL_VERSION_ATLEAST(3, 0, 0)
-		SDL_UnlockAudio();
-#endif
-
 		if (cs->tracks[track].tcf != AUDIO) {
 			D(bug("CDPlay_bincue: not playing data track %d!\n", track));
 		} else if (PreparePlayOrScanAudio(player)) {
-			return true;
+			result = true;
 		}
 
 	}
-	return false;
+	pthread_mutex_unlock(&player_lock);
+	return result;
 }
 
 bool CDScan_bincue(void *fh, uint8 start_m, uint8 start_s, uint8 start_f, bool reverse) {
@@ -1092,6 +1090,8 @@ void MixAudio_bincue(uint8 *stream, int dest_stream_len)
 {
 	if (!dest_stream_len) return;
 
+	pthread_mutex_lock(&player_lock);
+
 	if (currently_playing) {
 		CDPlayer *player = currently_playing;
 
@@ -1140,6 +1140,7 @@ void MixAudio_bincue(uint8 *stream, int dest_stream_len)
 		}
 		
 	}
+	pthread_mutex_unlock(&player_lock);
 }
 
 static void OpenPlayerStream(CDPlayer * player) {
