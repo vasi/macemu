@@ -167,8 +167,23 @@ static uint8 silence_byte;
 // CD Player state; multiple players supported through list
 
 static std::list<CDPlayer*> players;
-static pthread_mutex_t player_lock;
 CDPlayer* currently_playing = NULL;
+
+#if SDL_VERSION_ATLEAST(3, 0, 0)
+static SDL_Mutex *player_lock;
+#else
+static SDL_mutex *player_lock;
+#endif
+#define LOCK_PLAYER		SDL_LockMutex(player_lock)
+#define UNLOCK_PLAYER	SDL_UnlockMutex(player_lock)
+
+void InitBinCue() {
+	player_lock = SDL_CreateMutex();
+}
+
+void ExitBinCue() {
+	SDL_DestroyMutex(player_lock);
+}
 
 CDPlayer* CSToPlayer(CueSheet* cs)
 {
@@ -508,9 +523,6 @@ void *open_bincue(const char *name)
 		D(bug("malloc failed\n"));
 		return NULL;
 	}
-
-	pthread_mutex_init(&player_lock, NULL);
-
 	if (LoadCueSheet(name, cs)) {
 		CDPlayer *player = (CDPlayer *) malloc(sizeof(CDPlayer));
 		player->cs = cs;
@@ -560,7 +572,6 @@ void close_bincue(void *fh)
 #endif
 		free(player);
 	}
-	pthread_mutex_destroy(&player_lock);
 }
 
 /*
@@ -816,7 +827,7 @@ bool CDPlay_bincue(void *fh, uint8 start_m, uint8 start_s, uint8 start_f,
 	CDPlayer *player = CSToPlayer(cs);
 	bool result = false;
 	if (cs && player) {
-		pthread_mutex_lock(&player_lock);
+		LOCK_PLAYER;
 
 		// Pause another player if needed
 		CDPause_playing(player);
@@ -878,9 +889,8 @@ bool CDPlay_bincue(void *fh, uint8 start_m, uint8 start_s, uint8 start_f,
 		} else if (PreparePlayOrScanAudio(player)) {
 			result = true;
 		}
-
+		UNLOCK_PLAYER;
 	}
-	pthread_mutex_unlock(&player_lock);
 	return result;
 }
 
@@ -1090,9 +1100,9 @@ void MixAudio_bincue(uint8 *stream, int dest_stream_len)
 {
 	if (!dest_stream_len) return;
 
-	pthread_mutex_lock(&player_lock);
-
 	if (currently_playing) {
+		LOCK_PLAYER;
+
 		CDPlayer *player = currently_playing;
 
 		OutputSettings & o = current_output_settings;
@@ -1138,9 +1148,8 @@ void MixAudio_bincue(uint8 *stream, int dest_stream_len)
 			}
 #endif
 		}
-		
+		UNLOCK_PLAYER;
 	}
-	pthread_mutex_unlock(&player_lock);
 }
 
 static void OpenPlayerStream(CDPlayer * player) {

@@ -169,7 +169,9 @@ void AudioInit(void)
 
 	// Init semaphore
 	audio_irq_done_sem = SDL_CreateSemaphore(0);
-
+#ifdef BINCUE
+	InitBinCue();
+#endif
 	// Open and initialize audio device
 	open_audio();
 }
@@ -195,7 +197,9 @@ void AudioExit(void)
 {
 	// Close audio device
 	close_audio();
-
+#ifdef BINCUE
+	ExitBinCue();
+#endif
 	// Delete semaphore
 	if (audio_irq_done_sem)
 		SDL_DestroySemaphore(audio_irq_done_sem);
