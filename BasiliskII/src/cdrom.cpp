@@ -674,12 +674,15 @@ int16 CDROMControl(uint32 pb, uint32 dce)
 		case 7:			// EjectTheDisc
 			D(bug("CDROMControl EjectTheDisc\n"));
 			if (ReadMacInt8(info->status + dsDiskInPlace) > 0) {
-				if (info->drop) {
+				if (info->drop || !SysIsFixedDisk(info->fh)) {
 					SysAllowRemoval(info->fh);
 					SysEject(info->fh);
 					info->twok_offset = -1;
-					info->close_fh();
-					info->drop = false;
+					if (info->drop) {
+						info->close_fh();
+						info->drop = false;
+						info->fh = NULL;
+					}
 				}
 				else {
 					remount_map.insert(std::make_pair(ReadMacInt16(pb + ioVRefNum), info->fh));
@@ -687,9 +690,9 @@ int16 CDROMControl(uint32 pb, uint32 dce)
 					D(bug("At least stop cd playback if it's some kind of CD %d,%d,%d\n",
 						info->lead_out[0], info->lead_out[1], info->lead_out[2]));
 					SysCDStop(info->fh, info->lead_out[0], info->lead_out[1], info->lead_out[2]);
+					info->fh = NULL;
 				}
 
-				info->fh = NULL;
 				WriteMacInt8(info->status + dsDiskInPlace, 0);
 				return noErr;
 			} else {
