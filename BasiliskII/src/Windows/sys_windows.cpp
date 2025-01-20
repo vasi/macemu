@@ -60,12 +60,21 @@ struct file_handle {
 	loff_t file_size;	// Size of file data (only valid if is_file is true)
 	cachetype cache;
 	bool is_media_present;
+	bool is_tray_locked;
 
 #if defined(BINCUE)
 	bool is_bincue;		// Flag: BIN CUE file
 	void *bincue_fd;
-	file_handle() {is_bincue = false;} // default bincue false
 #endif
+	file_handle() {
+		// Since our PreventRemovalOfVolume implementaion on Windows increments a lock counter,
+		// let's have our own safeguard to prevent incrementing it more than once.
+		is_tray_locked = false;
+#if defined(BINCUE)
+		is_bincue = false;	// default bincue false
+#endif
+	}
+
 };
 
 // Open file handles
@@ -718,9 +727,8 @@ void SysEject(void *arg)
 		// exactly ... need to find out
 		// EjectVolume(toupper(*fh->name),false);
 
-		// Preventing is cumulative, try to make sure it's indeed released now
-		for (int i = 0; i < 10; i++)
-			PreventRemovalOfVolume(fh->fh, false);
+		PreventRemovalOfVolume(fh->fh, false);
+		fh->is_tray_locked = false;
 
 		if (!PrefsFindBool("nocdrom")) {
 			DWORD dummy;
@@ -819,12 +827,16 @@ bool SysIsDiskInserted(void *arg)
 
 void SysPreventRemoval(void *arg)
 {
+	D(bug("SysPreventRemoval %p\n", arg));
 	file_handle *fh = (file_handle *)arg;
 	if (!fh)
 		return;
 
-	if (fh->is_cdrom && fh->fh)
+	if (fh->is_cdrom && fh->fh && !fh->is_tray_locked) {
+		D(bug("  doing prevent removal\n"));
 		PreventRemovalOfVolume(fh->fh, true);
+		fh->is_tray_locked = true;
+	}
 }
 
 
@@ -834,12 +846,16 @@ void SysPreventRemoval(void *arg)
 
 void SysAllowRemoval(void *arg)
 {
+	D(bug("SysAllowRemoval %p\n", arg));
 	file_handle *fh = (file_handle *)arg;
 	if (!fh)
 		return;
 
-	if (fh->is_cdrom && fh->fh)
+	if (fh->is_cdrom && fh->fh) {
+		D(bug("  doing allow removal\n"));
 		PreventRemovalOfVolume(fh->fh, false);
+		fh->is_tray_locked = false;
+	}
 }
 
 
