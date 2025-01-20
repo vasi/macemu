@@ -351,6 +351,8 @@ void CDROMDrop(const char *path) {
 
 void CDROMExit(void)
 {
+	CDROMRemount(); // just to put the handles moved to the remount collection back so they get cleaned up
+
 	drive_vec::iterator info, end = drives.end();
 	for (info = drives.begin(); info != end; ++info)
 		info->close_fh();
@@ -369,6 +371,7 @@ bool CDROMMountVolume(void *fh)
 		++info;
 	if (info != end) {
 		if (SysIsDiskInserted(info->fh)) {
+			D(bug("CDROMMountVolume doing SysPreventRemoval cdrom drive num %d\n", info->num));
 			SysPreventRemoval(info->fh);
 			WriteMacInt8(info->status + dsDiskInPlace, 1);
 			read_toc(*info);
@@ -538,6 +541,7 @@ int16 CDROMOpen(uint32 pb, uint32 dce)
 			
 			// Disk in drive?
 			if (SysIsDiskInserted(info->fh)) {
+				D(bug("CDROMOpen doing SysPreventRemoval cdrom drive num %d\n", info->num));
 				SysPreventRemoval(info->fh);
 				WriteMacInt8(info->status + dsDiskInPlace, 1);
 				read_toc(*info);
@@ -670,12 +674,15 @@ int16 CDROMControl(uint32 pb, uint32 dce)
 		case 7:			// EjectTheDisc
 			D(bug("CDROMControl EjectTheDisc\n"));
 			if (ReadMacInt8(info->status + dsDiskInPlace) > 0) {
-				if (info->drop) {
+				if (info->drop || !SysIsFixedDisk(info->fh)) {
 					SysAllowRemoval(info->fh);
 					SysEject(info->fh);
 					info->twok_offset = -1;
-					info->close_fh();
-					info->drop = false;
+					if (info->drop) {
+						info->close_fh();
+						info->drop = false;
+						info->fh = NULL;
+					}
 				}
 				else {
 					remount_map.insert(std::make_pair(ReadMacInt16(pb + ioVRefNum), info->fh));
@@ -683,9 +690,9 @@ int16 CDROMControl(uint32 pb, uint32 dce)
 					D(bug("At least stop cd playback if it's some kind of CD %d,%d,%d\n",
 						info->lead_out[0], info->lead_out[1], info->lead_out[2]));
 					SysCDStop(info->fh, info->lead_out[0], info->lead_out[1], info->lead_out[2]);
+					info->fh = NULL;
 				}
 
-				info->fh = NULL;
 				WriteMacInt8(info->status + dsDiskInPlace, 0);
 				return noErr;
 			} else {
@@ -754,8 +761,10 @@ int16 CDROMControl(uint32 pb, uint32 dce)
 			if (ReadMacInt8(info->status + dsDiskInPlace) > 0) {
 				if (ReadMacInt16(pb + csParam) == 1)
 					SysAllowRemoval(info->fh);
-				else
+				else {
+					D(bug("SetUserEject call doing SysPreventRemoval cdrom drive num %d\n", info->num));
 					SysPreventRemoval(info->fh);
+				}
 				return noErr;
 			} else {
 				return offLinErr;
