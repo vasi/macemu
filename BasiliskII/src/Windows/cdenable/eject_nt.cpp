@@ -24,6 +24,10 @@
 
 #include <winioctl.h>
 
+#define DEBUG 0
+#include "debug.h"
+
+
 // Prototypes
 
 extern "C" {
@@ -128,12 +132,17 @@ BOOL PreventRemovalOfVolume(HANDLE hVolume, BOOL fPreventRemoval)
 
    PMRBuffer.PreventMediaRemoval = fPreventRemoval;
 
-   return DeviceIoControl( hVolume,
-                           IOCTL_STORAGE_MEDIA_REMOVAL,
+   BOOL ret = DeviceIoControl( hVolume,
+                           IOCTL_STORAGE_EJECTION_CONTROL,
                            &PMRBuffer, sizeof(PREVENT_MEDIA_REMOVAL),
                            NULL, 0,
                            &dwBytesReturned,
                            NULL);
+	D(bug("    PreventRemoval IOCTL returned %d\n", ret));
+	if (!ret) {
+		D(bug("       failed, last error %d\n", GetLastError()));
+	}
+	return ret;
 }
 
 BOOL AutoEjectVolume( HANDLE hVolume, BOOL reload )
