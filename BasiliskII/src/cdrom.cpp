@@ -371,7 +371,7 @@ bool CDROMMountVolume(void *fh)
 		++info;
 	if (info != end) {
 		if (SysIsDiskInserted(info->fh)) {
-			bug("CDROMMountVolume doing SysPreventRemoval cdrom drive num %d\n", info->num);
+			D(bug("CDROMMountVolume doing SysPreventRemoval cdrom drive num %d\n", info->num));
 			SysPreventRemoval(info->fh);
 			WriteMacInt8(info->status + dsDiskInPlace, 1);
 			read_toc(*info);
@@ -541,7 +541,7 @@ int16 CDROMOpen(uint32 pb, uint32 dce)
 			
 			// Disk in drive?
 			if (SysIsDiskInserted(info->fh)) {
-				bug("CDROMOpen doing SysPreventRemoval cdrom drive num %d\n", info->num);
+				D(bug("CDROMOpen doing SysPreventRemoval cdrom drive num %d\n", info->num));
 				SysPreventRemoval(info->fh);
 				WriteMacInt8(info->status + dsDiskInPlace, 1);
 				read_toc(*info);
@@ -762,7 +762,7 @@ int16 CDROMControl(uint32 pb, uint32 dce)
 				if (ReadMacInt16(pb + csParam) == 1)
 					SysAllowRemoval(info->fh);
 				else {
-					bug("SetUserEject call doing SysPreventRemoval cdrom drive num %d\n", info->num);
+					D(bug("SetUserEject call doing SysPreventRemoval cdrom drive num %d\n", info->num));
 					SysPreventRemoval(info->fh);
 				}
 				return noErr;
