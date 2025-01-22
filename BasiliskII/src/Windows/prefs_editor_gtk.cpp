@@ -57,6 +57,7 @@ static void create_jit_pane(GtkWidget *top);
 static void read_settings(void);
 static void add_volume_entry_with_type(const char * filename, bool cdrom);
 static void add_volume_entry_guessed(const char * filename);
+static bool volume_in_list(const char * filename);
 
 
 /*
@@ -852,7 +853,7 @@ static void read_volumes_settings(void)
 
 	// Add one more cdrom entry if present in the combo
 	const char *str = gtk_entry_get_text(GTK_ENTRY(GTK_COMBO(w_cdrom_drive)->entry));
-	if (str && strlen(str))
+	if (str && strlen(str) && !volume_in_list(str))
 		PrefsAddString("cdrom", str);
 }
 
@@ -877,8 +878,37 @@ static const char* get_file_size_str (const char * filename)
 	}
 }
 
+
+static bool volume_in_list(const char * filename) {
+	bool found = false;
+
+	GtkTreeModel * m = GTK_TREE_MODEL(volume_list_model);
+
+	GtkTreeIter row;
+	if (gtk_tree_model_get_iter_first(m, &row)) {
+		do {
+			GValue cur_filename = G_VALUE_INIT;
+
+			gtk_tree_model_get_value(m, &row, VOLUME_LIST_FILENAME, &cur_filename);
+
+			if (strcmp(g_value_get_string(&cur_filename), filename) == 0) {
+				found = true;
+			}
+
+			g_value_unset(&cur_filename);
+
+			if (found) break;
+		} while (gtk_tree_model_iter_next(GTK_TREE_MODEL(volume_list_model), &row));
+	}
+
+	return found;
+}
+
+
 // Add a volume file as the given type
 static void add_volume_entry_with_type(const char * filename, bool cdrom) {
+	if (volume_in_list(filename)) return;
+
 	GtkTreeIter row;
 	gtk_list_store_append(GTK_LIST_STORE(volume_list_model), &row);
 	// set the values for the new row
@@ -924,6 +954,7 @@ static void cb_cdrom (GtkCellRendererToggle *cell, char *path_str, gpointer data
 static void cb_cdrom_add(...) {
 	const char *str = gtk_entry_get_text(GTK_ENTRY(GTK_COMBO(w_cdrom_drive)->entry));
 	if (str && strcmp(str, "") != 0) {
+		if (volume_in_list(str)) return;
 		add_volume_entry_with_type(str, true);
 
 		gtk_entry_set_text(GTK_ENTRY(GTK_COMBO(w_cdrom_drive)->entry), "");

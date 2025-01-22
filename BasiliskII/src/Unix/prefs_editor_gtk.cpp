@@ -830,8 +830,37 @@ static const char* get_file_size (const char * filename)
 	}
 }
 
+
+static bool volume_in_list(const char * filename) {
+	bool found = false;
+
+	GtkTreeModel * m = GTK_TREE_MODEL(volume_list_model);
+
+	GtkTreeIter row;
+	if (gtk_tree_model_get_iter_first(m, &row)) {
+		do {
+			GValue cur_filename = G_VALUE_INIT;
+
+			gtk_tree_model_get_value(m, &row, VOLUME_LIST_FILENAME, &cur_filename);
+
+			if (strcmp(g_value_get_string(&cur_filename), filename) == 0) {
+				found = true;
+			}
+
+			g_value_unset(&cur_filename);
+
+			if (found) break;
+		} while (gtk_tree_model_iter_next(GTK_TREE_MODEL(volume_list_model), &row));
+	}
+
+	return found;
+}
+
+
 // Add a volume file as the given type
 static void add_volume_entry_with_type(const char * filename, bool cdrom) {
+	if (volume_in_list(filename)) return;
+
 	GtkTreeIter row;
 	gtk_list_store_append(GTK_LIST_STORE(volume_list_model), &row);
 	// set the values for the new row
