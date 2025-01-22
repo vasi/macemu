@@ -542,14 +542,13 @@ bool PrefsEditor(void)
 
 static GtkWidget *volume_list, *w_extfs;
 static GtkListStore *volume_list_model;
-static GtkWidget *volume_change_type_button, *volume_remove_button;
+static GtkWidget *volume_remove_button;
 
 // Volume list selection changed
 static void cl_selected(GtkTreeSelection * selection, gpointer user_data) {
 	if (selection) {
 		bool have_selection = gtk_tree_selection_get_selected(selection, NULL, NULL);
 
-		gtk_widget_set_sensitive(GTK_WIDGET(volume_change_type_button), have_selection);
 		gtk_widget_set_sensitive(GTK_WIDGET(volume_remove_button), have_selection);
 	}
 }
@@ -770,25 +769,17 @@ static void init_volume_model() {
 		);
 }
 
-// "Change Disk Type" button clicked
-static void cb_change_type_volume(GSimpleAction *action, GVariant *parameter, gpointer user_data)
-{
-	GtkTreeSelection *sel = gtk_tree_view_get_selection(GTK_TREE_VIEW(volume_list));
-	if (sel) {
-		GtkTreeIter row;
-		if (gtk_tree_selection_get_selected(sel, NULL, &row)) {
-			gboolean cdrom;
-			gtk_tree_model_get(GTK_TREE_MODEL(volume_list_model), &row,
-				VOLUME_LIST_CDROM, &cdrom,
-				-1);
+static void toggle_cdrom_val(GtkTreeIter *row) {
+	gboolean cdrom;
+	gtk_tree_model_get(GTK_TREE_MODEL(volume_list_model), row,
+		VOLUME_LIST_CDROM, &cdrom,
+		-1);
 
-			cdrom = !cdrom;
+	cdrom = !cdrom;
 
-			gtk_list_store_set(volume_list_model, &row,
-				VOLUME_LIST_CDROM, cdrom,
-				-1);
-		}
-	}
+	gtk_list_store_set(volume_list_model, row,
+		VOLUME_LIST_CDROM, cdrom,
+		-1);
 }
 
 // Read settings from widgets and set preferences
@@ -872,11 +863,15 @@ static void add_volume_entry_guessed(const char * filename) {
 	add_volume_entry_with_type(filename, guess_if_file_is_cdrom(filename));
 }
 
-static void volume_type_cell_data_function(GtkTreeViewColumn *col, GtkCellRenderer *renderer, GtkTreeModel *model, GtkTreeIter *row, gpointer user_data) {
-	gboolean cdrom;
-	gtk_tree_model_get(model, row, VOLUME_LIST_CDROM, &cdrom, -1);
-	const char * display_text = cdrom? GetString(STR_VOL_TYPE_CDROM) : GetString(STR_VOL_TYPE_DISK);
-	g_object_set(renderer, "text", display_text, NULL);
+// CD-ROM checkbox changed
+static void cb_cdrom (GtkCellRendererToggle *cell, char *path_str, gpointer data)
+{
+	GtkTreeIter iter;
+	GtkTreePath *path = gtk_tree_path_new_from_string (path_str);
+	if (gtk_tree_model_get_iter (GTK_TREE_MODEL(volume_list_model), &iter, path)) {
+		toggle_cdrom_val(&iter);
+	}
+	gtk_tree_path_free (path);
 }
 
 
@@ -911,12 +906,16 @@ static void create_volumes_pane(GtkWidget *top)
 	gtk_tree_view_column_add_attribute(column, renderer, "text", VOLUME_LIST_FILENAME);
 
 	column = gtk_tree_view_column_new();
-	gtk_tree_view_column_set_title(column, GetString(STR_VOL_HEADING_TYPE));
+	gtk_tree_view_column_set_title(column, GetString(STR_VOL_HEADING_CDROM));
 	gtk_tree_view_append_column(GTK_TREE_VIEW(volume_list), column);
-	renderer = gtk_cell_renderer_text_new();
-	gtk_tree_view_column_pack_start(column, renderer, FALSE);
+	renderer = gtk_cell_renderer_toggle_new();
+	g_signal_connect (renderer, "toggled",
+	                  G_CALLBACK (cb_cdrom), NULL);
+	gtk_tree_view_column_set_alignment(column, 0.5);
+
+	gtk_tree_view_column_pack_start(column, renderer, TRUE);
 	// connect tree column to model field
-	gtk_tree_view_column_set_cell_data_func(column, renderer, volume_type_cell_data_function, NULL, NULL);
+	gtk_tree_view_column_add_attribute(column, renderer, "active", VOLUME_LIST_CDROM);
 
 	column = gtk_tree_view_column_new();
 	gtk_tree_view_column_set_title(column, GetString(STR_VOL_HEADING_SIZE));
@@ -954,12 +953,10 @@ static void create_volumes_pane(GtkWidget *top)
 	static const opt_desc buttons[] = {
 		{STR_ADD_VOLUME_BUTTON, G_CALLBACK(cb_add_volume)},
 		{STR_CREATE_VOLUME_BUTTON, G_CALLBACK(cb_create_volume)},
-		{STR_CHANGE_TYPE_VOLUME_BUTTON, G_CALLBACK(cb_change_type_volume), &volume_change_type_button},
 		{STR_REMOVE_VOLUME_BUTTON, G_CALLBACK(cb_remove_volume), &volume_remove_button},
 		{0, NULL},
 	};
 	make_button_box(box, 0, buttons);
-	gtk_widget_set_sensitive(volume_change_type_button, FALSE);
 	gtk_widget_set_sensitive(volume_remove_button, FALSE);
 	make_separator(box);
 
