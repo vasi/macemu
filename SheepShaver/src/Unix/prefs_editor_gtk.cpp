@@ -18,6 +18,7 @@
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+#include "gdk/gdk.h"
 #include "sysdeps.h"
 
 #include <gtk/gtk.h>
@@ -506,6 +507,34 @@ static void cl_selected(GtkTreeSelection * selection, gpointer user_data) {
 	}
 }
 
+
+// Process proposed drop
+gboolean volume_list_drag_motion (GtkWidget *widget, GdkDragContext *drag_context, gint x, gint y, guint time,
+                                            gpointer user_data)
+{
+	GtkTreePath *path;
+	GtkTreeViewDropPosition pos;
+	// Don't allow tree-style drops onto, only list-style drops between
+	if (gtk_tree_view_get_dest_row_at_pos(GTK_TREE_VIEW(volume_list), x,y, &path, &pos)) {
+		switch (pos) {
+			case GTK_TREE_VIEW_DROP_INTO_OR_AFTER:
+				gtk_tree_view_set_drag_dest_row(GTK_TREE_VIEW(volume_list), path, GTK_TREE_VIEW_DROP_AFTER);
+				break;
+			case GTK_TREE_VIEW_DROP_INTO_OR_BEFORE:
+				gtk_tree_view_set_drag_dest_row(GTK_TREE_VIEW(volume_list), path, GTK_TREE_VIEW_DROP_BEFORE);
+				break;
+			case GTK_TREE_VIEW_DROP_BEFORE:
+			case GTK_TREE_VIEW_DROP_AFTER:
+				// these are ok, no change
+				break;
+		}
+		gdk_drag_status(drag_context, drag_context->suggested_action, time);
+		return TRUE;
+	}
+	return FALSE;
+}
+
+
 // Something dropped on volume list
 static void drag_data_received(GtkWidget *list, GdkDragContext *drag_context, gint x, gint y, GtkSelectionData *data,
 	guint info, guint time, gpointer user_data)
@@ -524,6 +553,35 @@ static void drag_data_received(GtkWidget *list, GdkDragContext *drag_context, gi
 		gchar * filename = g_filename_from_uri(*uri, NULL, NULL);
 		if (filename) {
 			add_volume_entry_guessed(filename);
+
+			// figure out where in the list they dropped
+			GtkTreePath *path;
+			GtkTreeViewDropPosition pos;
+			if (gtk_tree_view_get_dest_row_at_pos(GTK_TREE_VIEW(volume_list), x,y, &path, &pos)) {
+				GtkTreeIter dest_iter;
+				if (gtk_tree_model_get_iter(GTK_TREE_MODEL(volume_list_model), &dest_iter, path)) {
+
+					// Find the item we just added and put it in place
+					GtkTreeIter last;
+					GtkTreeIter cur;
+					if (gtk_tree_model_get_iter_first(GTK_TREE_MODEL(volume_list_model), &cur)) {
+						do {
+							last = cur;
+						} while (gtk_tree_model_iter_next(GTK_TREE_MODEL(volume_list_model), &cur));
+					}
+					switch (pos) {
+						case GTK_TREE_VIEW_DROP_AFTER:
+						case GTK_TREE_VIEW_DROP_INTO_OR_AFTER:
+							gtk_list_store_move_after(volume_list_model, &last, &dest_iter);
+							break;
+						case GTK_TREE_VIEW_DROP_BEFORE:
+						case GTK_TREE_VIEW_DROP_INTO_OR_BEFORE:
+							gtk_list_store_move_before(volume_list_model, &last, &dest_iter);
+							break;
+					}
+				}
+			}
+
 			g_free(filename);
 		}
 	}
@@ -827,6 +885,8 @@ static void create_volumes_pane(GtkWidget *top)
 	gtk_drag_dest_add_uri_targets(volume_list);
 	// add a drop handler to get dropped files; don't supersede the drop handler for reordering
 	gtk_signal_connect_after(GTK_OBJECT(volume_list), "drag_data_received", GTK_SIGNAL_FUNC(drag_data_received), NULL);
+	// process proposed drops to limit drop locations
+	gtk_signal_connect(GTK_OBJECT(volume_list), "drag-motion", GTK_SIGNAL_FUNC(volume_list_drag_motion), NULL);
 
 	char *str;
 	int32 index;
