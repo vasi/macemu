@@ -326,11 +326,14 @@ bool ether_init(void)
 	// Don't raise SIGPIPE, let errno be set to EPIPE
 	struct sigaction sigpipe_sa;
 	if (sigaction(SIGPIPE, NULL, &sigpipe_sa) == 0) {
-		assert(sigpipe_sa.sa_handler == SIG_DFL || sigpipe_sa.sa_handler == SIG_IGN);
-		sigfillset(&sigpipe_sa.sa_mask);
-		sigpipe_sa.sa_flags = 0;
-		sigpipe_sa.sa_handler = SIG_IGN;
-		sigaction(SIGPIPE, &sigpipe_sa, NULL);
+		if (sigpipe_sa.sa_handler == SIG_DFL || sigpipe_sa.sa_handler == SIG_IGN) {
+			sigfillset(&sigpipe_sa.sa_mask);
+			sigpipe_sa.sa_flags = 0;
+			sigpipe_sa.sa_handler = SIG_IGN;
+			sigaction(SIGPIPE, &sigpipe_sa, NULL);
+		}
+		// If something else in the process has installed a SIGPIPE handler (SDL kmsdrm?),
+		// and wants to eat our unwanted signals instead, that's fine too.
 	}
 
 #ifdef HAVE_SLIRP
