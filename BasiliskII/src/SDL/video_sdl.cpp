@@ -723,6 +723,7 @@ void driver_base::adapt_to_video_mode() {
 	ADBSetRelMouseMode(false);
 
 	// Init blitting routines
+	if (!s) return;
 	SDL_PixelFormat *f = s->format;
 	VisualFormat visualFormat;
 	visualFormat.depth = sdl_depth_of_video_depth(VIDEO_MODE_DEPTH);
