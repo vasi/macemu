@@ -396,6 +396,7 @@ static GtkWidget *make_combobox(GtkWidget *top, int label_id, const char *defaul
 // Window closed
 static gint window_closed(void)
 {
+	start_clicked = false;
 	return FALSE;
 }
 
