@@ -72,11 +72,11 @@ static void add_volume_entry_guessed(const char * filename);
 #endif
 
 struct opt_desc {
+	opt_desc(int l, GCallback f, GtkWidget **s=NULL) : label_id(l), func(f), save_ref(s) {}
+
 	int label_id;
 	GtkSignalFunc func;
 	GtkWidget ** save_ref;
-
-	opt_desc(int label_id, GCallback func, GtkWidget **save_ref=NULL) : label_id(label_id), func(func), save_ref(save_ref) { }
 };
 
 struct combo_desc {
