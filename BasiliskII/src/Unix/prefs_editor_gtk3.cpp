@@ -722,6 +722,14 @@ static bool has_file_ext (GFile *file, const char *ext)
 	return (g_strcmp0(file_ext, ext) == 0);
 }
 
+static bool guess_if_file_is_cdrom(GFile * volume) {
+	return has_file_ext(volume, ".iso") ||
+#ifdef BINCUE
+		has_file_ext(volume, ".cue") ||
+#endif
+		has_file_ext(volume, ".toast");
+}
+
 // User selected a volume to add
 static void cb_add_volume_response (GtkFileChooser *chooser, int response)
 {
@@ -732,7 +740,7 @@ static void cb_add_volume_response (GtkFileChooser *chooser, int response)
 		gtk_list_store_set (GTK_LIST_STORE(volume_store), &toplevel,
 				COLUMN_PATH, g_file_get_path(volume),
 				COLUMN_SIZE, get_file_size(volume),
-				COLUMN_CDROM, has_file_ext(volume, ".iso"),
+				COLUMN_CDROM, guess_if_file_is_cdrom(volume),
 				-1);
 		g_object_unref(volume);
 	}

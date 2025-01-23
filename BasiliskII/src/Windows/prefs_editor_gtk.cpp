@@ -28,6 +28,8 @@
 
 #include <shellapi.h>
 
+#include <fstream>
+
 #include "user_strings.h"
 #include "version.h"
 #include "cdrom.h"
@@ -53,6 +55,9 @@ static void create_ethernet_pane(GtkWidget *top);
 static void create_memory_pane(GtkWidget *top);
 static void create_jit_pane(GtkWidget *top);
 static void read_settings(void);
+static void add_volume_entry_with_type(const char * filename, bool cdrom);
+static void add_volume_entry_guessed(const char * filename);
+static bool volume_in_list(const char * filename);
 
 
 /*
@@ -100,8 +105,11 @@ gchar * tchar_to_g_utf8(const TCHAR * str) {
 
 
 struct opt_desc {
+	opt_desc(int l, GCallback f, GtkWidget **s=NULL) : label_id(l), func(f), save_ref(s) {}
+
 	int label_id;
 	GtkSignalFunc func;
+	GtkWidget ** save_ref;
 };
 
 struct combo_desc {
@@ -188,6 +196,9 @@ static GtkWidget *make_button_box(GtkWidget *top, int border, const opt_desc *bu
 		gtk_widget_show(button);
 		gtk_signal_connect_object(GTK_OBJECT(button), "clicked", buttons->func, NULL);
 		gtk_box_pack_start(GTK_BOX(bb), button, TRUE, TRUE, 0);
+		if (buttons->save_ref) {
+			*(buttons->save_ref) = button;
+		}
 		buttons++;
 	}
 	return bb;
@@ -506,6 +517,7 @@ bool PrefsEditor(void)
 {
 	// Create window
 	win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+	gtk_window_set_default_size(GTK_WINDOW(win), 640, 480); // a little bigger than the default
 	gtk_window_set_title(GTK_WINDOW(win), GetString(STR_PREFS_TITLE));
 	gtk_signal_connect(GTK_OBJECT(win), "delete_event", GTK_SIGNAL_FUNC(window_closed), NULL);
 	gtk_signal_connect(GTK_OBJECT(win), "destroy", GTK_SIGNAL_FUNC(window_destroyed), NULL);
@@ -564,7 +576,8 @@ bool PrefsEditor(void)
 
 static GtkWidget *w_enableextfs, *w_extdrives, *w_cdrom_drive;
 static GtkWidget *volume_list;
-static int selected_volume;
+static GtkListStore *volume_list_model;
+static GtkWidget *volume_remove_button;
 
 // Set sensitivity of widgets
 static void set_volumes_sensitive(void)
@@ -575,10 +588,39 @@ static void set_volumes_sensitive(void)
 	gtk_widget_set_sensitive(w_cdrom_drive, !no_cdrom);
 }
 
-// Volume in list selected
-static void cl_selected(GtkWidget *list, int row, int column)
+// Volume list selection changed
+static void cl_selected(GtkTreeSelection * selection, gpointer user_data) {
+	if (selection) {
+		bool have_selection = gtk_tree_selection_get_selected(selection, NULL, NULL);
+
+		gtk_widget_set_sensitive(GTK_WIDGET(volume_remove_button), have_selection);
+	}
+}
+
+// Process proposed drop
+gboolean volume_list_drag_motion (GtkWidget *widget, GdkDragContext *drag_context, gint x, gint y, guint time,
+                                            gpointer user_data)
 {
-	selected_volume = row;
+	GtkTreePath *path;
+	GtkTreeViewDropPosition pos;
+	// Don't allow tree-style drops onto, only list-style drops between
+	if (gtk_tree_view_get_dest_row_at_pos(GTK_TREE_VIEW(volume_list), x,y, &path, &pos)) {
+		switch (pos) {
+			case GTK_TREE_VIEW_DROP_INTO_OR_AFTER:
+				gtk_tree_view_set_drag_dest_row(GTK_TREE_VIEW(volume_list), path, GTK_TREE_VIEW_DROP_AFTER);
+				break;
+			case GTK_TREE_VIEW_DROP_INTO_OR_BEFORE:
+				gtk_tree_view_set_drag_dest_row(GTK_TREE_VIEW(volume_list), path, GTK_TREE_VIEW_DROP_BEFORE);
+				break;
+			case GTK_TREE_VIEW_DROP_BEFORE:
+			case GTK_TREE_VIEW_DROP_AFTER:
+				// these are ok, no change
+				break;
+		}
+		gdk_drag_status(drag_context, drag_context->suggested_action, time);
+		return TRUE;
+	}
+	return FALSE;
 }
 
 // Something dropped on volume list
@@ -598,7 +640,36 @@ static void drag_data_received(GtkWidget *list, GdkDragContext *drag_context, gi
 
 		gchar * filename = g_filename_from_uri(*uri, NULL, NULL);
 		if (filename) {
-			gtk_clist_append(GTK_CLIST(volume_list), &filename);
+			add_volume_entry_guessed(filename);
+
+			// figure out where in the list they dropped
+			GtkTreePath *path;
+			GtkTreeViewDropPosition pos;
+			if (gtk_tree_view_get_dest_row_at_pos(GTK_TREE_VIEW(volume_list), x,y, &path, &pos)) {
+				GtkTreeIter dest_iter;
+				if (gtk_tree_model_get_iter(GTK_TREE_MODEL(volume_list_model), &dest_iter, path)) {
+
+					// Find the item we just added and put it in place
+					GtkTreeIter last;
+					GtkTreeIter cur;
+					if (gtk_tree_model_get_iter_first(GTK_TREE_MODEL(volume_list_model), &cur)) {
+						do {
+							last = cur;
+						} while (gtk_tree_model_iter_next(GTK_TREE_MODEL(volume_list_model), &cur));
+					}
+					switch (pos) {
+						case GTK_TREE_VIEW_DROP_AFTER:
+						case GTK_TREE_VIEW_DROP_INTO_OR_AFTER:
+							gtk_list_store_move_after(volume_list_model, &last, &dest_iter);
+							break;
+						case GTK_TREE_VIEW_DROP_BEFORE:
+						case GTK_TREE_VIEW_DROP_INTO_OR_BEFORE:
+							gtk_list_store_move_before(volume_list_model, &last, &dest_iter);
+							break;
+					}
+				}
+			}
+
 			g_free(filename);
 		}
 	}
@@ -609,7 +680,7 @@ static void drag_data_received(GtkWidget *list, GdkDragContext *drag_context, gi
 static void add_volume_ok(GtkWidget *button, file_req_assoc *assoc)
 {
 	gchar *file = (gchar *)gtk_file_selection_get_filename(GTK_FILE_SELECTION(assoc->req));
-	gtk_clist_append(GTK_CLIST(volume_list), &file);
+	add_volume_entry_guessed(file);
 	gtk_widget_destroy(assoc->req);
 	delete assoc;
 }
@@ -624,9 +695,14 @@ static void create_volume_ok(GtkWidget *button, file_req_assoc *assoc)
 
 	int fd = _open(file, _O_WRONLY | _O_CREAT | _O_BINARY | _O_TRUNC, _S_IREAD | _S_IWRITE);
 	if (fd >= 0) {
+	  bool created_ok = false;
 	  if (_chsize(fd, size) == 0)
-		gtk_clist_append(GTK_CLIST(volume_list), &file);
+		created_ok = true;
 	  _close(fd);
+	  if (created_ok) {
+		// A created empty volume is always a new disk
+		add_volume_entry_with_type(file, false);
+	  }
 	}
 	gtk_widget_destroy(GTK_WIDGET(assoc->req));
 	delete assoc;
@@ -669,7 +745,13 @@ static void cb_create_volume(...)
 // "Remove Volume" button clicked
 static void cb_remove_volume(...)
 {
-	gtk_clist_remove(GTK_CLIST(volume_list), selected_volume);
+	GtkTreeSelection *sel = gtk_tree_view_get_selection(GTK_TREE_VIEW(volume_list));
+	if (sel) {
+		GtkTreeIter row;
+		if (gtk_tree_selection_get_selected(sel, NULL, &row)) {
+			gtk_list_store_remove(volume_list_model, &row);
+		}
+	}
 }
 
 // "Boot From" selected
@@ -711,64 +793,261 @@ static void tb_pollmedia(GtkWidget *widget)
 	PrefsReplaceBool("pollmedia", GTK_TOGGLE_BUTTON(widget)->active);
 }
 
+// Data source for the volumes list
+enum {
+	VOLUME_LIST_FILENAME = 0,
+	VOLUME_LIST_CDROM,
+	VOLUME_LIST_SIZE_DESC,
+	NUM_VOLUME_LIST_FIELDS
+};
+
+static void init_volume_model() {
+	volume_list_model = gtk_list_store_new(NUM_VOLUME_LIST_FIELDS,
+		G_TYPE_STRING,	// filename
+		G_TYPE_BOOLEAN,	// is CD-ROM
+		G_TYPE_STRING	// size desc
+		);
+}
+
+static void toggle_cdrom_val(GtkTreeIter *row) {
+	gboolean cdrom;
+	gtk_tree_model_get(GTK_TREE_MODEL(volume_list_model), row,
+		VOLUME_LIST_CDROM, &cdrom,
+		-1);
+
+	cdrom = !cdrom;
+
+	gtk_list_store_set(volume_list_model, row,
+		VOLUME_LIST_CDROM, cdrom,
+		-1);
+}
+
 // Read settings from widgets and set preferences
 static void read_volumes_settings(void)
 {
 	while (PrefsFindString("disk"))
 		PrefsRemoveItem("disk");
+	while (PrefsFindString("cdrom"))
+		PrefsRemoveItem("cdrom");	
 
-	for (int i=0; i<GTK_CLIST(volume_list)->rows; i++) {
-		char *str;
-		gtk_clist_get_text(GTK_CLIST(volume_list), i, 0, &str);
-		PrefsAddString("disk", str);
+	GtkTreeModel * m = GTK_TREE_MODEL(volume_list_model);
+
+	GtkTreeIter row;
+	if (gtk_tree_model_get_iter_first(m, &row)) {
+		do {
+			GValue filename = G_VALUE_INIT, is_cdrom = G_VALUE_INIT;
+
+			gtk_tree_model_get_value(m, &row, VOLUME_LIST_FILENAME, &filename);
+			gtk_tree_model_get_value(m, &row, VOLUME_LIST_CDROM, &is_cdrom);
+
+			//D(bug("handling %d: %s\n", g_value_get_boolean(&is_cdrom), g_value_get_string(&filename)));
+
+			const char * pref_name = g_value_get_boolean(&is_cdrom) ? "cdrom": "disk";
+			PrefsAddString(pref_name, g_value_get_string(&filename));
+
+			g_value_unset(&filename);
+			g_value_unset(&is_cdrom);
+
+		} while (gtk_tree_model_iter_next(GTK_TREE_MODEL(volume_list_model), &row));
 	}
 
-	const char *str = gtk_entry_get_text(GTK_ENTRY(GTK_COMBO(w_cdrom_drive)->entry));
-	if (str && strlen(str))
-		PrefsReplaceString("cdrom", str);
-	else
-		PrefsRemoveItem("cdrom");
-
 	PrefsReplaceString("extdrives", get_file_entry_path(w_extdrives));
+
+	// Add one more cdrom entry if present in the combo
+	const char *str = gtk_entry_get_text(GTK_ENTRY(GTK_COMBO(w_cdrom_drive)->entry));
+	if (str && strlen(str) && !volume_in_list(str))
+		PrefsAddString("cdrom", str);
 }
+
+
+// Gets the size of the volume as a pretty string
+static const char* get_file_size_str (const char * filename)
+{
+	if (strlen(filename) == 3 && filename[1] == ':' && filename[2] == '\\') {
+		// e.g. real CD-ROM drive
+		return "";
+	}
+	std::ifstream in(filename, std::ifstream::ate | std::ifstream::binary);
+	if (in.is_open()) {
+		uint64_t size = in.tellg();
+		in.close();
+		char *sizestr = g_format_size_full(size, G_FORMAT_SIZE_IEC_UNITS);
+		return sizestr;
+	}
+	else
+	{
+		return "Not Found";
+	}
+}
+
+
+static bool volume_in_list(const char * filename) {
+	bool found = false;
+
+	GtkTreeModel * m = GTK_TREE_MODEL(volume_list_model);
+
+	GtkTreeIter row;
+	if (gtk_tree_model_get_iter_first(m, &row)) {
+		do {
+			GValue cur_filename = G_VALUE_INIT;
+
+			gtk_tree_model_get_value(m, &row, VOLUME_LIST_FILENAME, &cur_filename);
+
+			if (strcmp(g_value_get_string(&cur_filename), filename) == 0) {
+				found = true;
+			}
+
+			g_value_unset(&cur_filename);
+
+			if (found) break;
+		} while (gtk_tree_model_iter_next(GTK_TREE_MODEL(volume_list_model), &row));
+	}
+
+	return found;
+}
+
+
+// Add a volume file as the given type
+static void add_volume_entry_with_type(const char * filename, bool cdrom) {
+	if (volume_in_list(filename)) return;
+
+	GtkTreeIter row;
+	gtk_list_store_append(GTK_LIST_STORE(volume_list_model), &row);
+	// set the values for the new row
+	gtk_list_store_set(GTK_LIST_STORE(volume_list_model), &row,
+		VOLUME_LIST_FILENAME, filename,
+		VOLUME_LIST_CDROM, cdrom,
+		VOLUME_LIST_SIZE_DESC, get_file_size_str(filename),
+		-1);
+}
+
+static bool has_file_ext (const char * str, const char *ext)
+{
+	char *file_ext = g_utf8_strrchr(str, 255, '.');
+	if (!file_ext)
+		return 0;
+	return (g_strcmp0(file_ext, ext) == 0);
+}
+
+static bool guess_if_file_is_cdrom(const char * volume) {
+	return has_file_ext(volume, ".iso") ||
+#ifdef BINCUE
+		has_file_ext(volume, ".cue") ||
+#endif
+		has_file_ext(volume, ".toast");
+}
+
+// Add a volume file and guess the type
+static void add_volume_entry_guessed(const char * filename) {
+	add_volume_entry_with_type(filename, guess_if_file_is_cdrom(filename));
+}
+
+// CD-ROM checkbox changed
+static void cb_cdrom (GtkCellRendererToggle *cell, char *path_str, gpointer data)
+{
+	GtkTreeIter iter;
+	GtkTreePath *path = gtk_tree_path_new_from_string (path_str);
+	if (gtk_tree_model_get_iter (GTK_TREE_MODEL(volume_list_model), &iter, path)) {
+		toggle_cdrom_val(&iter);
+	}
+	gtk_tree_path_free (path);
+}
+
+static void cb_cdrom_add(...) {
+	const char *str = gtk_entry_get_text(GTK_ENTRY(GTK_COMBO(w_cdrom_drive)->entry));
+	if (str && strcmp(str, "") != 0) {
+		if (volume_in_list(str)) return;
+		add_volume_entry_with_type(str, true);
+
+		gtk_entry_set_text(GTK_ENTRY(GTK_COMBO(w_cdrom_drive)->entry), "");
+	}
+}
+
+
 
 // Create "Volumes" pane
 static void create_volumes_pane(GtkWidget *top)
 {
 	GtkWidget *box, *scroll, *menu;
+	GtkTreeViewColumn *column;
+	GtkCellRenderer *renderer;
 
 	box = make_pane(top, STR_VOLUMES_PANE_TITLE);
 
 	scroll = gtk_scrolled_window_new(NULL, NULL);
 	gtk_widget_show(scroll);
 	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
-	volume_list = gtk_clist_new(1);
+
+	init_volume_model();
+
+	volume_list = gtk_tree_view_new();
+	gtk_tree_view_set_model(GTK_TREE_VIEW(volume_list), GTK_TREE_MODEL(volume_list_model));
 	gtk_widget_show(volume_list);
-	gtk_clist_set_selection_mode(GTK_CLIST(volume_list), GTK_SELECTION_SINGLE);
-	gtk_clist_set_shadow_type(GTK_CLIST(volume_list), GTK_SHADOW_NONE);
-	gtk_clist_set_reorderable(GTK_CLIST(volume_list), true);
-	gtk_signal_connect(GTK_OBJECT(volume_list), "select_row", GTK_SIGNAL_FUNC(cl_selected), NULL);
+
+	gtk_tree_view_set_reorderable(GTK_TREE_VIEW(volume_list), true);
+
+	column = gtk_tree_view_column_new();
+	gtk_tree_view_column_set_title(column, GetString(STR_VOL_HEADING_LOCATION));
+	gtk_tree_view_column_set_expand(column, true);
+	gtk_tree_view_append_column(GTK_TREE_VIEW(volume_list), column);
+	renderer = gtk_cell_renderer_text_new();
+	gtk_tree_view_column_pack_start(column, renderer, TRUE);
+	// connect tree column to model field
+	gtk_tree_view_column_add_attribute(column, renderer, "text", VOLUME_LIST_FILENAME);
+
+	column = gtk_tree_view_column_new();
+	gtk_tree_view_column_set_title(column, GetString(STR_VOL_HEADING_CDROM));
+	gtk_tree_view_append_column(GTK_TREE_VIEW(volume_list), column);
+	renderer = gtk_cell_renderer_toggle_new();
+	g_signal_connect (renderer, "toggled",
+	                  G_CALLBACK (cb_cdrom), NULL);
+	gtk_tree_view_column_set_alignment(column, 0.5);
+
+	gtk_tree_view_column_pack_start(column, renderer, TRUE);
+	// connect tree column to model field
+	gtk_tree_view_column_add_attribute(column, renderer, "active", VOLUME_LIST_CDROM);
+
+	column = gtk_tree_view_column_new();
+	gtk_tree_view_column_set_title(column, GetString(STR_VOL_HEADING_SIZE));
+	gtk_tree_view_append_column(GTK_TREE_VIEW(volume_list), column);
+	renderer = gtk_cell_renderer_text_new();
+	gtk_tree_view_column_pack_start(column, renderer, FALSE);
+	// connect tree column to model field
+	gtk_tree_view_column_add_attribute(column, renderer, "text", VOLUME_LIST_SIZE_DESC);
+
+	GtkTreeSelection *sel = gtk_tree_view_get_selection(GTK_TREE_VIEW(volume_list));
+	g_signal_connect(sel, "changed", G_CALLBACK(cl_selected), NULL);
+	gtk_tree_selection_set_mode(sel, GTK_SELECTION_SINGLE);
 
 	// also support volume files dragged onto the list from outside
 	gtk_drag_dest_add_uri_targets(volume_list);
 	// add a drop handler to get dropped files; don't supersede the drop handler for reordering
 	gtk_signal_connect_after(GTK_OBJECT(volume_list), "drag_data_received", GTK_SIGNAL_FUNC(drag_data_received), NULL);
+	// process proposed drops to limit drop locations
+	gtk_signal_connect(GTK_OBJECT(volume_list), "drag-motion", GTK_SIGNAL_FUNC(volume_list_drag_motion), NULL);
 
 	char *str;
-	int32 index = 0;
-	while ((str = const_cast<char *>(PrefsFindString("disk", index++))) != NULL)
-		gtk_clist_append(GTK_CLIST(volume_list), &str);
-	gtk_scrolled_window_add_with_viewport(GTK_SCROLLED_WINDOW(scroll), volume_list);
+	int32 index;
+	const char * types[] = {"disk", "cdrom", NULL};
+	for (const char ** type = types; *type != NULL; type++) {
+		index = 0;
+		while ((str = const_cast<char *>(PrefsFindString(*type, index))) != NULL) {
+			bool is_cdrom = strcmp(*type, "cdrom") == 0;
+			add_volume_entry_with_type(str, is_cdrom);
+			index++;
+		}
+	}
+	gtk_container_add(GTK_CONTAINER(scroll), volume_list);
 	gtk_box_pack_start(GTK_BOX(box), scroll, TRUE, TRUE, 0);
-	selected_volume = 0;
 
 	static const opt_desc buttons[] = {
 		{STR_ADD_VOLUME_BUTTON, GTK_SIGNAL_FUNC(cb_add_volume)},
 		{STR_CREATE_VOLUME_BUTTON, GTK_SIGNAL_FUNC(cb_create_volume)},
-		{STR_REMOVE_VOLUME_BUTTON, GTK_SIGNAL_FUNC(cb_remove_volume)},
+		{STR_REMOVE_VOLUME_BUTTON, G_CALLBACK(cb_remove_volume), &volume_remove_button},
 		{0, NULL},
 	};
 	make_button_box(box, 0, buttons);
+	gtk_widget_set_sensitive(volume_remove_button, FALSE);
 	make_separator(box);
 
 	static const opt_desc options[] = {
@@ -786,10 +1065,16 @@ static void create_volumes_pane(GtkWidget *top)
 	make_checkbox(box, STR_NOCDROM_CTRL, "nocdrom", GTK_SIGNAL_FUNC(tb_nocdrom));
 
 	GList *glist = add_cdrom_names();
-	str = const_cast<char *>(PrefsFindString("cdrom"));
-	if (str == NULL)
+	//str = const_cast<char *>(PrefsFindString("cdrom"));
+	//if (str == NULL)
 		str = "";
 	w_cdrom_drive = make_combobox(box, STR_CDROM_DRIVE_CTRL, str, glist);
+
+	GtkWidget * cdrom_hbox = gtk_widget_get_parent(w_cdrom_drive);
+	GtkWidget * cdrom_add_button = gtk_button_new_with_label("Add");
+		gtk_widget_show(cdrom_add_button);
+		gtk_signal_connect_object(GTK_OBJECT(cdrom_add_button), "clicked", GTK_SIGNAL_FUNC(cb_cdrom_add), NULL);
+	gtk_box_pack_start(GTK_BOX(cdrom_hbox), cdrom_add_button, FALSE, TRUE, 0);
 
 	make_checkbox(box, STR_POLLMEDIA_CTRL, "pollmedia", GTK_SIGNAL_FUNC(tb_pollmedia));
 
