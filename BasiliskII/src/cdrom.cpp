@@ -125,8 +125,8 @@ static const uint8 bcd2bin[256] = {
 
 // Struct for each drive
 struct cdrom_drive_info {
-	cdrom_drive_info() : num(0), fh(NULL), start_byte(0), status(0), drop(false), init_null(false) {}
-	cdrom_drive_info(void *fh_) : num(0), fh(fh_), start_byte(0), status(0), drop(false), init_null(false) {}
+	cdrom_drive_info() : num(0), fh(NULL), start_byte(0), status(0), drop(false), init_null(false), driver_reference_number(0) {}
+	cdrom_drive_info(void *fh_) : num(0), fh(fh_), start_byte(0), status(0), drop(false), init_null(false), driver_reference_number(0) {}
 	
 	void close_fh(void) { SysAllowRemoval(fh); Sys_close(fh); }
 	
@@ -150,7 +150,7 @@ struct cdrom_drive_info {
 	uint32 status;		// Mac address of drive status record
 	bool drop;  		// Disc image mounted by drag-and-drop
 	bool init_null;		// Init even if null
-	uint16 driver_reference_number = 0;  // The driver reference number to use for this drive's entry in the unit table
+	uint16 driver_reference_number;  // The driver reference number to use for this drive's entry in the unit table
 };
 
 // List of drives handled by this driver
