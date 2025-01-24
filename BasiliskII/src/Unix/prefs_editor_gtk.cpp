@@ -525,9 +525,9 @@ bool PrefsEditor(void)
 	gtk_widget_show(notebook);
 
 	static const opt_desc buttons[] = {
-		{STR_START_BUTTON, G_CALLBACK(cb_start)},
-		{STR_QUIT_BUTTON, G_CALLBACK(cb_quit)},
-		{0, NULL}
+		opt_desc(STR_START_BUTTON, G_CALLBACK(cb_start)),
+		opt_desc(STR_QUIT_BUTTON, G_CALLBACK(cb_quit)),
+		opt_desc(0, NULL)
 	};
 	make_button_box(box, 4, buttons);
 
@@ -982,10 +982,10 @@ static void create_volumes_pane(GtkWidget *top)
 	gtk_box_pack_start(GTK_BOX(box), scroll, TRUE, TRUE, 0);
 
 	static const opt_desc buttons[] = {
-		{STR_ADD_VOLUME_BUTTON, G_CALLBACK(cb_add_volume)},
-		{STR_CREATE_VOLUME_BUTTON, G_CALLBACK(cb_create_volume)},
-		{STR_REMOVE_VOLUME_BUTTON, G_CALLBACK(cb_remove_volume), &volume_remove_button},
-		{0, NULL},
+		opt_desc(STR_ADD_VOLUME_BUTTON, G_CALLBACK(cb_add_volume)),
+		opt_desc(STR_CREATE_VOLUME_BUTTON, G_CALLBACK(cb_create_volume)),
+		opt_desc(STR_REMOVE_VOLUME_BUTTON, G_CALLBACK(cb_remove_volume), &volume_remove_button),
+		opt_desc(0, NULL),
 	};
 	make_button_box(box, 0, buttons);
 	gtk_widget_set_sensitive(volume_remove_button, FALSE);
