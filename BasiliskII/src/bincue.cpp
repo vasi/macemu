@@ -126,8 +126,8 @@ typedef struct CDPlayer {
 	uint8 volume_right;			// CD player volume (right)
 	uint8 volume_mono;			// CD player single-channel volume
 	loff_t fileoffset;			// offset from file beginning to audiostart
-	bool audio_enabled = false; // audio initialized for this player?
-	bool scanning = false;      // is there currently scanning in progress
+	bool audio_enabled;			// audio initialized for this player?
+	bool scanning;				// is there currently scanning in progress
 	int reverse;                // for scanning, 0=forward, 1=reverse
 #ifdef OSX_CORE_AUDIO
 	OSXsoundOutput soundoutput;
@@ -529,6 +529,8 @@ void *open_bincue(const char *name)
 		player->volume_left = 0;
 		player->volume_right = 0;
 		player->volume_mono = 0;
+		player->audio_enabled = false;
+		player->scanning = false;
 #ifdef OSX_CORE_AUDIO
 		player->audio_enabled = true;
 #endif
