@@ -190,7 +190,10 @@ time_t MacTimeToTime(uint32 t)
 	local.tm_sec = 0;
 	local.tm_isdst = -1;
 	out = mktime(&local);
-	if (out == -1) return -1;
+	if (out == -1) {
+		D(bug("MacTimeToTime: mktime() can't convert local time starting point\n"));
+		return -1;
+	}
 
 #if MKTIME_START_LATER
 	// Then, if necessary, subtract from 1971 to go back to 1904
