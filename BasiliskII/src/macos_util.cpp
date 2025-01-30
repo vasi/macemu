@@ -226,12 +226,12 @@ time_t MacTimeToTime(uint32 t)
 		}
 	}
 
+	#if DEBUG
 	uint32 round_trip_val = TimeToMacTime(out);
 	D(bug("MacTimeToTime: round trip %u -> %ld -> %u\n", t, out, round_trip_val));
 
-	#if DEBUG
 	struct tm * show = localtime(&out);
-	D(bug("%s", asctime(show)));
+	D(bug("      %s", asctime(show)));
 	if (t != round_trip_val) {
 		D(bug("MacTimeToTime: Round-Trip Value Disagrees\n"));
 	}
