@@ -159,6 +159,13 @@ uint32 TimeToMacTime(time_t t)
 	return local->tm_sec + 60 * (local->tm_min + 60 * (local->tm_hour + 24 * (days - dayofs)));
 }
 
+#ifdef WIN32
+// mktime() here can't produce negative values so we have to start later
+#define MKTIME_START_LATER 1
+#else
+#define MKTIME_START_LATER 0
+#endif
+
 /*
  *  Convert MacOS time to time_t (seconds since 1.1.1970)
  */
@@ -167,9 +174,15 @@ time_t MacTimeToTime(uint32 t)
 {
 	time_t out;
 
-	// Find the time_t time of 1904-Jan-1 0:00 local time
+	// Find the time_t time of our local time starting point 1904-Jan-1 0:00 local time
 	struct tm local;
+#if MKTIME_START_LATER
+	// If we need to start later for mktime(),
+	// first find 1971-Jan-1 0:00 local time
+	local.tm_year = 71;
+#else
 	local.tm_year = 4;
+#endif
 	local.tm_mon = 0;
 	local.tm_mday = 1;
 	local.tm_hour = 0;
@@ -179,7 +192,12 @@ time_t MacTimeToTime(uint32 t)
 	out = mktime(&local);
 	if (out == -1) return -1;
 
-	// We want the time t seconds after
+#if MKTIME_START_LATER
+	// Then, if necessary, subtract from 1971 to go back to 1904
+	out -= 2114380800; // Seconds between 1904 and 1971
+#endif
+
+	// Now we want the time t seconds after the starting point
 	out += (time_t) t;
 
 	uint32 round_trip_val = TimeToMacTime(out);
