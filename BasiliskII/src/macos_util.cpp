@@ -217,7 +217,10 @@ time_t MacTimeToTime(uint32 t)
 		if (out_tm) {
 			out_tm->tm_year -= yearofs;
 			out_tm->tm_mday -= dayofs;
-			out = mktime(out_tm);
+			time_t offset_adjusted = mktime(out_tm);
+			if (offset_adjusted != -1) {
+				out = offset_adjusted;
+			}
 		} else {
 			D(bug("MacTimeToTime: error applying offsets\n"));
 		}
