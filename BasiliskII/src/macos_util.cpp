@@ -203,6 +203,26 @@ time_t MacTimeToTime(uint32 t)
 	// Now we want the time t seconds after the starting point
 	out += (time_t) t;
 
+	// Apply offset prefs
+	int32 yearofs = PrefsFindInt32("yearofs");
+	int32 dayofs = PrefsFindInt32("dayofs");
+	if (dayofs != 0 || yearofs != 0) {
+#ifdef WIN32
+		struct tm *out_tm = localtime(&out);
+#else
+		struct tm result;
+		localtime_r(&out, &result);
+		struct tm *out_tm = &result;
+#endif
+		if (out_tm) {
+			out_tm->tm_year -= yearofs;
+			out_tm->tm_mday -= dayofs;
+			out = mktime(out_tm);
+		} else {
+			D(bug("MacTimeToTime: error applying offsets\n"));
+		}
+	}
+
 	uint32 round_trip_val = TimeToMacTime(out);
 	D(bug("MacTimeToTime: round trip %u -> %ld -> %u\n", t, out, round_trip_val));
 
