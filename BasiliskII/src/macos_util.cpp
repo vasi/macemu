@@ -165,6 +165,33 @@ uint32 TimeToMacTime(time_t t)
 
 time_t MacTimeToTime(uint32 t)
 {
-	// simply subtract number of seconds between 1.1.1904 and 1.1.1970
-	return t - 2082826800;
+	time_t out;
+
+	// Find the time_t time of 1904-Jan-1 0:00 local time
+	struct tm local;
+	local.tm_year = 4;
+	local.tm_mon = 0;
+	local.tm_mday = 1;
+	local.tm_hour = 0;
+	local.tm_min = 0;
+	local.tm_sec = 0;
+	local.tm_isdst = -1;
+	out = mktime(&local);
+	if (out == -1) return -1;
+
+	// We want the time t seconds after
+	out += (time_t) t;
+
+	uint32 round_trip_val = TimeToMacTime(out);
+	D(bug("MacTimeToTime: round trip %u -> %ld -> %u\n", t, out, round_trip_val));
+
+	#if DEBUG
+	struct tm * show = localtime(&out);
+	D(bug("%s", asctime(show)));
+	if (t != round_trip_val) {
+		D(bug("MacTimeToTime: Round-Trip Value Disagrees\n"));
+	}
+	#endif
+
+	return out;
 }
