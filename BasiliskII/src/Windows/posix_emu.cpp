@@ -1135,6 +1135,11 @@ int my_write( int fd, const void *buffer, unsigned int count )
 
 static FILETIME get_file_time(time_t time) {
 	FILETIME ft;
+	if (time == -1) {
+		ft.dwHighDateTime = 0;
+		ft.dwLowDateTime = 0;
+		return ft;
+	}
 	unsigned long long result = 11644473600LL;
 	result += time;
 	result *= 10000000LL;
@@ -1149,9 +1154,9 @@ int my_utime( const char *path, struct my_utimbuf * my_times )
 	LPCTSTR p = MRP(tpath.get());
 	HANDLE f = CreateFile(p, FILE_WRITE_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (f != INVALID_HANDLE_VALUE) {
-		FILETIME crTime = get_file_time(my_times->actime);
+		FILETIME acTime = get_file_time(my_times->actime);
 		FILETIME modTime = get_file_time(my_times->modtime);
-		SetFileTime(f, &crTime, NULL, &modTime);
+		SetFileTime(f, NULL, &acTime, &modTime);
 		CloseHandle(f);
 		return 0;
 	}

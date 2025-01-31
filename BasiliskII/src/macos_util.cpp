@@ -159,12 +159,83 @@ uint32 TimeToMacTime(time_t t)
 	return local->tm_sec + 60 * (local->tm_min + 60 * (local->tm_hour + 24 * (days - dayofs)));
 }
 
+#ifdef WIN32
+// mktime() here can't produce negative values so we have to start later
+#define MKTIME_START_LATER 1
+#else
+#define MKTIME_START_LATER 0
+#endif
+
 /*
  *  Convert MacOS time to time_t (seconds since 1.1.1970)
  */
 
 time_t MacTimeToTime(uint32 t)
 {
-	// simply subtract number of seconds between 1.1.1904 and 1.1.1970
-	return t - 2082826800;
+	time_t out;
+
+	// Find the time_t time of our local time starting point 1904-Jan-1 0:00 local time
+	struct tm local;
+#if MKTIME_START_LATER
+	// If we need to start later for mktime(),
+	// first find 1971-Jan-1 0:00 local time
+	local.tm_year = 71;
+#else
+	local.tm_year = 4;
+#endif
+	local.tm_mon = 0;
+	local.tm_mday = 1;
+	local.tm_hour = 0;
+	local.tm_min = 0;
+	local.tm_sec = 0;
+	local.tm_isdst = -1;
+	out = mktime(&local);
+	if (out == -1) {
+		D(bug("MacTimeToTime: mktime() can't convert local time starting point\n"));
+		return -1;
+	}
+
+#if MKTIME_START_LATER
+	// Then, if necessary, subtract from 1971 to go back to 1904
+	out -= 2114380800; // Seconds between 1904 and 1971
+#endif
+
+	// Now we want the time t seconds after the starting point
+	out += (time_t) t;
+
+	// Apply offset prefs
+	int32 yearofs = PrefsFindInt32("yearofs");
+	int32 dayofs = PrefsFindInt32("dayofs");
+	if (dayofs != 0 || yearofs != 0) {
+#ifdef WIN32
+		struct tm *out_tm = localtime(&out);
+#else
+		struct tm result;
+		localtime_r(&out, &result);
+		struct tm *out_tm = &result;
+#endif
+		if (out_tm) {
+			out_tm->tm_year -= yearofs;
+			out_tm->tm_mday -= dayofs;
+			time_t offset_adjusted = mktime(out_tm);
+			if (offset_adjusted != -1) {
+				out = offset_adjusted;
+			}
+		} else {
+			D(bug("MacTimeToTime: error applying offsets\n"));
+		}
+	}
+
+	#if DEBUG
+	uint32 round_trip_val = TimeToMacTime(out);
+	D(bug("MacTimeToTime: round trip %u -> %ld -> %u\n", t, out, round_trip_val));
+
+	struct tm * show = localtime(&out);
+	D(bug("      %s", asctime(show)));
+	if (t != round_trip_val) {
+		D(bug("MacTimeToTime: Round-Trip Value Disagrees\n"));
+	}
+	#endif
+
+	return out;
 }
