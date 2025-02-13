@@ -1955,7 +1955,7 @@ void display_alert(int title_id, int prefix_id, int button_id, const char *text)
 	                                           GTK_MESSAGE_WARNING,
 	                                           GTK_BUTTONS_NONE,
 	                                           GetString(title_id), NULL);
-	gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(dialog), text);
+	gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(dialog), "%s", text);
 	gtk_dialog_add_button(GTK_DIALOG(dialog), GetString(button_id), GTK_RESPONSE_CLOSE);
 	g_signal_connect(dialog, "response", G_CALLBACK(dl_destroyed), NULL);
 	gtk_widget_show(dialog);
