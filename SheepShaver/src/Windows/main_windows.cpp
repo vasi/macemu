@@ -184,6 +184,8 @@ int main(int argc, char **argv)
 	printf(" %s\n", GetString(STR_ABOUT_TEXT2));
 
 	// Parse command line arguments
+
+	// Check for options we want to process before PrefsInit
 	for (int i=1; i<argc; i++) {
 		if (strcmp(argv[i], "--help") == 0) {
 			usage(argv[0]);
@@ -194,14 +196,32 @@ int main(int argc, char **argv)
 				UserPrefsPath = to_tstring(argv[i]);
 				argv[i] = NULL;
 			}
-		} else if (argv[i][0] == '-') {
-			fprintf(stderr, "Unrecognized option '%s'\n", argv[i]);
-			usage(argv[0]);
+		}
+	}
+
+	// Remove processed arguments
+	for (int i=1; i<argc; i++) {
+		int k;
+		for (k=i; k<argc; k++)
+			if (argv[k] != NULL)
+				break;
+		if (k > i) {
+			k -= i;
+			for (int j=i+k; j<argc; j++)
+				argv[j-k] = argv[j];
+			argc -= k;
 		}
 	}
 
 	// Read preferences
 	PrefsInit(NULL, argc, argv);
+
+	for (int i=1; i<argc; i++) {
+		if (argv[i][0] == '-') {
+			fprintf(stderr, "Unrecognized option '%s'\n", argv[i]);
+			usage(argv[0]);
+		}
+	}
 
 	// #chenchijung 2024/2/21: move vm_init(), memory allocation for Mac RAM and Mac ROM here to avoid "cannot map RAM: no Error" bug.
 	//   caused by MSI afterburner (RIVA Tuner statistic tuner Server?). It is a workaround since I don't know why. But it works in my test env.
