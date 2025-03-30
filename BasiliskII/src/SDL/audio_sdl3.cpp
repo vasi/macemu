@@ -63,6 +63,7 @@ static int speaker_volume = MAC_MAX_VOLUME;
 static bool main_mute = false;
 static bool speaker_mute = false;
 
+static SDL_Thread *startup_thread;
 volatile static bool playing_startup, exit_startup;
 SDL_AudioSpec audio_spec;
 
@@ -147,6 +148,11 @@ static void start_threads() {
 }
 
 static void stop_threads() {
+	exit_startup = true;
+	if (startup_thread != NULL)
+		SDL_WaitThread(startup_thread, NULL);
+	startup_thread = NULL;
+	//
 	interrupt_thread_quit = true;
 	if (interrupt_thread != NULL)
 		SDL_WaitThread(interrupt_thread, NULL);
@@ -543,7 +549,7 @@ static int play_startup(void *arg) {
 }
 
 void PlayStartupSound() {
-	SDL_CreateThread(play_startup, "play_startup", NULL);
+	startup_thread = SDL_CreateThread(play_startup, "play_startup", NULL);
 }
 
 #endif	// SDL_VERSION_ATLEAST
