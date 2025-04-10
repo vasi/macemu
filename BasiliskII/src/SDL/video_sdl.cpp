@@ -42,7 +42,7 @@
 
 #include "sysdeps.h"
 
-#include <SDL.h>
+#include "my_sdl.h"
 #if SDL_COMPILEDVERSION >= SDL_VERSIONNUM(1, 0, 0) && SDL_COMPILEDVERSION < SDL_VERSIONNUM(2, 0, 0)
 
 #include <SDL_mutex.h>

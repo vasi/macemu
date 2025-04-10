@@ -25,7 +25,7 @@
 #include <signal.h>
 #include <errno.h>
 
-#include <SDL.h>
+#include "my_sdl.h"
 #include <SDL_mutex.h>
 #include <SDL_thread.h>
 

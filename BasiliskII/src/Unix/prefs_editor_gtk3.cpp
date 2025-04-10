@@ -38,7 +38,7 @@
 #include "g_resource.h"
 
 #if defined(USE_SDL_AUDIO) || defined(USE_SDL_VIDEO)
-#include <SDL.h>
+#include "my_sdl.h"
 #endif
 
 #define DEBUG 0

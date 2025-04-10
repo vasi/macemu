@@ -41,7 +41,7 @@
 
 #include "sysdeps.h"
 
-#include <SDL.h>
+#include "my_sdl.h"
 #if SDL_VERSION_ATLEAST(3, 0, 0)
 
 #include <errno.h>

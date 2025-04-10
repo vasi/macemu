@@ -23,7 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <SDL.h>
+#include "my_sdl.h"
 
 #include "sysdeps.h"
 #include "main.h"
@@ -821,9 +821,7 @@ void SheepMem::Exit(void)
  */
 
 #ifdef USE_SDL_VIDEO
-#if SDL_VERSION_ATLEAST(3, 0, 0)
-#include <SDL_video.h>
-#else
+#if !SDL_VERSION_ATLEAST(3, 0, 0)
 #include <SDL_syswm.h>
 #endif
 extern SDL_Window *sdl_window;

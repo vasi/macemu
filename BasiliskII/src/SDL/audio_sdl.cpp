@@ -19,19 +19,16 @@
  */
 
 #include "sysdeps.h"
+
+#include "my_sdl.h"
+#if !SDL_VERSION_ATLEAST(3, 0, 0)
+
 #include "cpu_emulation.h"
 #include "main.h"
 #include "prefs.h"
 #include "user_strings.h"
 #include "audio.h"
 #include "audio_defs.h"
-
-#include <SDL_mutex.h>
-#include <SDL_audio.h>
-#include <SDL_version.h>
-#include <SDL_timer.h>
-
-#if !SDL_VERSION_ATLEAST(3, 0, 0)
 
 #define DEBUG 0
 #include "debug.h"

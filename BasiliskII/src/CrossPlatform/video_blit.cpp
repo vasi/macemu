@@ -23,7 +23,7 @@
 #include "video_blit.h"
 
 #if USE_SDL_VIDEO
-#include <SDL.h>
+#include "my_sdl.h"
 #endif
 
 #include <stdio.h>

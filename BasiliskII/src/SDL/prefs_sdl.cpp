@@ -23,7 +23,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
-#include <SDL.h>
+#include "my_sdl.h"
 
 #include "prefs.h"
 

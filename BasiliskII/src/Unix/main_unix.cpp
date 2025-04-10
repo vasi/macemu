@@ -27,8 +27,7 @@
 #include <sstream>
 
 #ifdef USE_SDL
-# include <SDL.h>
-# include <SDL_main.h>
+# include "my_sdl.h"
 #if !SDL_VERSION_ATLEAST(3, 0, 0)
 #define SDL_PLATFORM_MACOS	__MACOSX__
 #endif
