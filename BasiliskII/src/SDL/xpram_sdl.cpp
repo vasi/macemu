@@ -23,13 +23,24 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "my_sdl.h"
-
+#include "prefs.h"
 #include "xpram.h"
 
 
 // XPRAM file name and path
 const char XPRAM_FILE_NAME[] = ".basilisk_ii_xpram";
 
+static const char *getPath() {
+	const char *path = PrefsFindString("xpram");
+	if (path && *path) return path;
+	// Build a full-path to the file
+	static char full_path[4096];
+	const char *dir = SDL_getenv("HOME");
+	if (!dir)
+		dir = "./";
+	SDL_snprintf(full_path, sizeof(full_path), "%s/%s", dir, XPRAM_FILE_NAME);
+	return full_path;
+}
 
 /*
  *  Load XPRAM from settings file
@@ -37,18 +48,7 @@ const char XPRAM_FILE_NAME[] = ".basilisk_ii_xpram";
 
 void LoadXPRAM(const char *dir)
 {
-	// Build a full-path to the file
-	char full_path[4096];
-	if (!dir) {
-		dir = SDL_getenv("HOME");
-	}
-	if (!dir) {
-		dir = "./";
-	}
-	SDL_snprintf(full_path, sizeof(full_path), "%s/%s", dir, XPRAM_FILE_NAME);
-	
-	// Open the XPRAM file
-	FILE *f = fopen(full_path, "rb");
+	FILE *f = fopen(getPath(), "rb");
 	if (f != NULL) {
 		fread(XPRAM, 256, 1, f);
 		fclose(f);
@@ -62,16 +62,7 @@ void LoadXPRAM(const char *dir)
 
 void SaveXPRAM(void)
 {
-	// Build a full-path to the file
-	char full_path[4096];
-	const char *dir = SDL_getenv("HOME");
-	if (!dir) {
-		dir = "./";
-	}
-	SDL_snprintf(full_path, sizeof(full_path), "%s/%s", dir, XPRAM_FILE_NAME);
-
-	// Save the XPRAM file
-	FILE *f = fopen(full_path, "wb");
+	FILE *f = fopen(getPath(), "wb");
 	if (f != NULL) {
 		fwrite(XPRAM, 256, 1, f);
 		fclose(f);
@@ -85,14 +76,5 @@ void SaveXPRAM(void)
 
 void ZapPRAM(void)
 {
-	// Build a full-path to the file
-	char full_path[4096];
-	const char *dir = SDL_getenv("HOME");
-	if (!dir) {
-		dir = "./";
-	}
-	SDL_snprintf(full_path, sizeof(full_path), "%s/%s", dir, XPRAM_FILE_NAME);
-
-	// Delete the XPRAM file
-	remove(full_path);
+	remove(getPath());
 }

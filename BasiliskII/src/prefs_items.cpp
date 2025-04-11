@@ -87,6 +87,7 @@ prefs_desc common_prefs_items[] = {
 	{"name_encoding", TYPE_INT32, false,	"file name encoding"},
 	{"delay", TYPE_INT32, false,	"additional delay [uS] every 64k instructions"},
 	{"init_grab", TYPE_BOOLEAN, false,	"initially grabbing mouse"},
+	{"xpram", TYPE_STRING, false, "path of xpram file"},
 	{NULL, TYPE_END, false, NULL} // End of list
 };
 
