@@ -25,6 +25,7 @@ typedef std::basic_string<TCHAR> tstring;
 
 #include "xpram.h"
 
+#include "prefs.h"
 
 // XPRAM file name and path
 #if POWERPC_ROM
@@ -42,12 +43,16 @@ static tstring xpram_path;
 static void build_xpram_path(void)
 {
 	xpram_path.clear();
+	const char *path = PrefsFindString("xpram");
+	if (path && *path) xpram_path = path;
+	else {
 	int pwd_len = GetCurrentDirectory(0, NULL);
 	TCHAR *pwd = new TCHAR[pwd_len];
 	if (GetCurrentDirectory(pwd_len, pwd) == pwd_len - 1)
 		xpram_path = tstring(pwd) + TEXT('\\');
 	delete[] pwd;
 	xpram_path += XPRAM_FILE_NAME;
+	}
 }
 
 
