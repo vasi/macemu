@@ -1388,8 +1388,7 @@ static GList *add_ether_names (void)
 #else
 				if (false) {
 #endif
-					char *str = new char[64];
-					strncpy(str, ifr->ifr_name, 63);
+					char *str = g_strdup(ifr->ifr_name);
 					glist = g_list_append(glist, str);
 				}
 			}
