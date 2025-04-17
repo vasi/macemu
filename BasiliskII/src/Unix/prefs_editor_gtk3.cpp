@@ -669,16 +669,18 @@ bool PrefsEditor(void)
 #endif
 	if (!is_jit_capable())
 		gtk_widget_set_sensitive(GTK_WIDGET(gtk_builder_get_object(builder, "jit-pane")), false);
-	GList *glist = add_serial_names();
-	add_combo_box_values(glist, "seriala");
-	add_combo_box_values(glist, "serialb");
-	glist = add_ether_names();
-	add_combo_box_values(glist, "ether");
+	GList *glist_serial = add_serial_names();
+	add_combo_box_values(glist_serial, "seriala");
+	add_combo_box_values(glist_serial, "serialb");
+	GList *glist_ether = add_ether_names();
+	add_combo_box_values(glist_ether, "ether");
 	bind_sensitivity("udptunnel", "udpport");
 
 	// Show window and enter main loop
 	gtk_widget_show(win);
 	gtk_main();
+	g_list_free_full(glist_serial, free);
+	g_list_free_full(glist_ether, free);
 	return start_clicked;
 }
 
@@ -1361,7 +1363,7 @@ static GList *add_serial_names (void)
 		closedir(d);
 	}
 	if (!glist)
-		glist = g_list_append(glist, (void *)"<none>");
+		glist = g_list_append(glist, g_strdup("<none>"));
 	return glist;
 }
 
@@ -1388,8 +1390,7 @@ static GList *add_ether_names (void)
 #else
 				if (false) {
 #endif
-					char *str = new char[64];
-					strncpy(str, ifr->ifr_name, 63);
+					char *str = g_strdup(ifr->ifr_name);
 					glist = g_list_append(glist, str);
 				}
 			}
@@ -1398,10 +1399,10 @@ static GList *add_ether_names (void)
 	}
 #ifdef HAVE_SLIRP
 	static char s_slirp[] = "slirp";
-	glist = g_list_append(glist, s_slirp);
+	glist = g_list_append(glist, g_strdup(s_slirp));
 #endif
 	if (!glist)
-		glist = g_list_append(glist, (void *)"<none>");
+		glist = g_list_append(glist, g_strdup("<none>"));
 	return glist;
 }
 
