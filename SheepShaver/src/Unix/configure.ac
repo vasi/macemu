@@ -1606,7 +1606,7 @@ if [[ "x$EMULATED_PPC" = "xyes" ]]; then
           DYNGEN_CC=$CXX
         elif command -v g++ >/dev/null; then
           vers=`g++ -dumpversion`
-          function version { echo "$@" | awk -F. '{ printf("%d%03d%03d%03d\n", $1,$2,$3,$4); }'; }
+          version() { echo "$@" | awk -F. '{ printf("%d%03d%03d%03d\n", $1,$2,$3,$4); }'; }
           if [[ $(version $vers) -ge $(version "2.7.0") ]] && [[ $(version $vers) -lt $(version "4.0.0") ]]; then
             DYNGEN_CC="$gxx"
           fi
