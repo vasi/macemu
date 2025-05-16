@@ -475,11 +475,8 @@ void QuitEmulator(void)
 
 	// Free ROM/RAM areas
 	if (RAMBaseHost != VM_MAP_FAILED) {
-		vm_release(RAMBaseHost, RAMSize);
+		vm_release(RAMBaseHost, RAMSize + 0x100000);
 		RAMBaseHost = NULL;
-	}
-	if (ROMBaseHost != VM_MAP_FAILED) {
-		vm_release(ROMBaseHost, 0x100000);
 		ROMBaseHost = NULL;
 	}
 
