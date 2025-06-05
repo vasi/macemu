@@ -59,6 +59,7 @@ links:
 	       include/prefs.h include/scsi.h include/serial.h include/prefs_editor.h \
 	       include/serial_defs.h include/sony.h include/sys.h \
 	       include/timer.h include/xpram.h include/color_scheme.h \
+	       include/my_sdl.h \
 	       BeOS/audio_beos.cpp BeOS/extfs_beos.cpp BeOS/scsi_beos.cpp \
 	       BeOS/serial_beos.cpp BeOS/sys_beos.cpp BeOS/timer_beos.cpp \
 	       BeOS/xpram_beos.cpp BeOS/SheepDriver BeOS/SheepNet \
