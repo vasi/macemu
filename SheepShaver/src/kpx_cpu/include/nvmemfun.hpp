@@ -170,7 +170,7 @@ private:
 		
 		// copy do_convention_call and patch in the address of pf
 		
-		do_convention_call_instance_copy = (unsigned char *) vm_acquire(do_convention_call_code_len);
+		do_convention_call_instance_copy = (unsigned char *)VirtualAlloc(NULL, do_convention_call_code_len, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 		// Thunk buffer needs to be around while default_call_conv_ptr() is still in use,
 		// longer than nv_mem_fun1_t lifetime
 		//FIXME track the lifetime of this

@@ -83,6 +83,9 @@ uint8 *ROMBaseHost;		// Base address of Mac ROM (host address space)
 DWORD win_os;			// Windows OS id
 DWORD win_os_major;		// Windows OS version major
 
+#ifdef MEM_BULK
+uint8 gKernelData[0x2000];
+#endif
 
 // Global variables
 static int kernel_area = -1;				// SHM ID of Kernel Data area
@@ -105,7 +108,7 @@ static uintptr sig_stack = 0;				// Stack for PowerPC interrupt routine
 
 uint32  SheepMem::page_size;				// Size of a native page
 uintptr SheepMem::zero_page = 0;			// Address of ro page filled in with zeros
-uintptr SheepMem::base = 0x60000000;		// Address of SheepShaver data
+uintptr SheepMem::base = 0x51000000;		// Address of SheepShaver data
 uintptr SheepMem::proc;						// Bottom address of SheepShave procedures
 uintptr SheepMem::data;						// Top of SheepShaver data (stack like storage)
 
@@ -344,15 +347,17 @@ int main(int argc, char **argv)
 		if (!PrefsEditor())
 			goto quit;
 
+#ifndef MEM_BULK
 	// Create areas for Kernel Data
 	if (!kernel_data_init())
 		goto quit;
+#endif
 	kernel_data = (KernelData *)Mac2HostAddr(KERNEL_DATA_BASE);
 	emulator_data = &kernel_data->ed;
 	KernelDataAddr = KERNEL_DATA_BASE;
 	D(bug("Kernel Data at %p (%08x)\n", kernel_data, KERNEL_DATA_BASE));
 	D(bug("Emulator Data at %p (%08x)\n", emulator_data, KERNEL_DATA_BASE + offsetof(KernelData, ed)));
-
+#if 0
 	// Create area for DR Cache
 	if (vm_mac_acquire(DR_EMULATOR_BASE, DR_EMULATOR_SIZE) < 0) {
 		sprintf(str, GetString(STR_DR_EMULATOR_MMAP_ERR), strerror(errno));
@@ -368,7 +373,7 @@ int main(int argc, char **argv)
 	dr_cache_area_mapped = true;
 	DRCacheAddr = (uint32)Mac2HostAddr(DR_CACHE_BASE);
 	D(bug("DR Cache at %p (%08x)\n", DRCacheAddr, DR_CACHE_BASE));
-
+#endif
 	// Create area for SheepShaver data
 	if (!SheepMem::Init()) {
 		sprintf(str, GetString(STR_SHEEP_MEM_MMAP_ERR), strerror(errno));

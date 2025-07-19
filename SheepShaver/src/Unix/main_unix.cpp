@@ -208,7 +208,7 @@ uint8 *RAMBaseHost;		// Base address of Mac RAM (host address space)
 uint8 *ROMBaseHost;		// Base address of Mac ROM (host address space)
 uint32 ROMEnd;
 
-#if defined(__APPLE__) && defined(__x86_64__)
+#if defined(__APPLE__) && defined(__x86_64__) || defined(MEM_BULK)
 uint8 gZeroPage[0x3000], gKernelData[0x2000];
 #endif
 
@@ -1004,7 +1004,7 @@ int main(int argc, char **argv)
 		goto quit;
 	}
 
-#if !defined(__APPLE__) || !defined(__x86_64__)
+#if !(defined(__APPLE__) && defined(__x86_64__) || defined(MEM_BULK))
 	// Create areas for Kernel Data
 	if (!kernel_data_init())
 		goto quit;
@@ -1059,7 +1059,7 @@ int main(int argc, char **argv)
 	}
 #endif
 	if (!memory_mapped_from_zero) {
-#ifndef PAGEZERO_HACK
+#if !defined(PAGEZERO_HACK) && !defined(MEM_BULK)
 		// Create Low Memory area (0x0000..0x3000)
 		if (vm_mac_acquire_fixed(0, 0x3000) < 0) {
 			sprintf(str, GetString(STR_LOW_MEM_MMAP_ERR), strerror(errno));
@@ -2314,7 +2314,7 @@ bool SheepMem::Init(void)
 	page_size = getpagesize();
 
 	// Allocate SheepShaver globals
-#ifdef NATMEM_OFFSET
+#if defined(NATMEM_OFFSET) || defined(MEM_BULK)
 	if (vm_mac_acquire_fixed(ROM_BASE + ROM_AREA_SIZE + SIG_STACK_SIZE, size) < 0)
 		return false;
 	uint8 *adr = Mac2HostAddr(ROM_BASE + ROM_AREA_SIZE + SIG_STACK_SIZE);

@@ -92,7 +92,7 @@
 #if !defined(EMULATED_PPC)
 #define REAL_ADDRESSING 1
 #include "ppc_asm.tmpl"
-#elif defined(NATMEM_OFFSET)
+#elif defined(NATMEM_OFFSET) || defined(MEM_BULK)
 #define DIRECT_ADDRESSING 1
 #else
 #define REAL_ADDRESSING 1

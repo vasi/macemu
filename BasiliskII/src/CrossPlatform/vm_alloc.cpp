@@ -83,9 +83,11 @@ typedef unsigned long vm_uintptr_t;
 #ifndef MAP_ANONYMOUS
 #define MAP_ANONYMOUS 0
 #endif
-
+#ifdef MEM_BULK
+#define MAP_EXTRA_FLAGS 0
+#else
 #define MAP_EXTRA_FLAGS (MAP_32BIT)
-
+#endif
 #ifdef HAVE_MMAP_VM
 #if (defined(__linux__) && defined(__i386__)) || defined(__sun__) || defined(__FreeBSD__) || defined(__NetBSD__) || HAVE_LINKER_SCRIPT
 /* Force a reasonnable address below 0x80000000 on x86 so that we
@@ -180,6 +182,14 @@ static int vm_error(kern_return_t ret_code)
 }
 #endif
 
+#ifdef MEM_BULK
+vm_uintptr_t VMBaseDiff;
+static const int ALLOC_UNIT = 0x10000;
+static vm_uintptr_t mapAddr;
+static void *vm_acquire_internal(size_t size, int options);
+static int vm_acquire_fixed_internal(void *addr, size_t size, int options);
+#endif
+
 /* Initialize the VM system. Returns 0 if successful, -1 for errors.  */
 
 int vm_init(void)
@@ -206,6 +216,10 @@ int vm_init(void)
 	}
 #endif
 
+#ifdef MEM_BULK
+	VMBaseDiff = (vm_uintptr_t)vm_acquire_internal(0x60000000, VM_MAP_DEFAULT);
+	mapAddr = 0;
+#endif
 	return 0;
 }
 
@@ -242,7 +256,7 @@ int vm_init_reserved(void *hostAddress) {
    and default protection bits are read / write. The return value
    is the actual mapping address chosen or VM_MAP_FAILED for errors.  */
 
-void * vm_acquire(size_t size, int options)
+static void *vm_acquire_internal(size_t size, int options)
 {
 	void * addr;
 	
@@ -304,13 +318,14 @@ void * vm_acquire(size_t size, int options)
 	if (vm_protect(addr, size, VM_PAGE_DEFAULT) != 0)
 		return VM_MAP_FAILED;
 	
+	//fprintf(stderr, "vm_acquire_internal: %lx\n", (vm_uintptr_t)addr);
 	return addr;
 }
 
 /* Allocate zero-filled memory at exactly ADDR (which must be page-aligned).
    Retuns 0 if successful, -1 on errors.  */
 
-int vm_acquire_fixed(void * addr, size_t size, int options)
+static int vm_acquire_fixed_internal(void * addr, size_t size, int options)
 {
 	errno = 0;
 	
@@ -362,6 +377,33 @@ int vm_acquire_fixed(void * addr, size_t size, int options)
 		return -1;
 
 	return 0;
+}
+
+void *vm_acquire(size_t size, int options) {
+#ifdef MEM_BULK
+	//fprintf(stderr, "vm_acquire:       addr=%08lx size=%08lx\n", mapAddr, size);
+	void *addr = (void *)(mapAddr + VMBaseDiff);
+	mapAddr += (size + ALLOC_UNIT - 1) / ALLOC_UNIT * ALLOC_UNIT;
+	if (vm_protect(addr, size, VM_PAGE_DEFAULT) != 0)
+		return VM_MAP_FAILED;
+	return addr;
+#else
+	return vm_acquire_internal(size, options);
+#endif
+}
+
+int vm_acquire_fixed(void *addr, size_t size, int options) {
+#ifdef MEM_BULK
+	vm_uintptr_t addr_mac = (vm_uintptr_t)addr - VMBaseDiff;
+	//fprintf(stderr, "vm_acquire_fixed: addr=%08lx size=%08lx\n", addr_mac, size);
+	assert(addr_mac >= mapAddr);
+	mapAddr = addr_mac + (size + ALLOC_UNIT - 1) / ALLOC_UNIT * ALLOC_UNIT;
+	if (vm_protect(addr, size, VM_PAGE_DEFAULT) != 0)
+		return -1;
+	return 0; // success
+#else
+	return vm_acquire_fixed_internal(addr, size, options);
+#endif
 }
 
 /* Deallocate any mapping for the region starting at ADDR and extending

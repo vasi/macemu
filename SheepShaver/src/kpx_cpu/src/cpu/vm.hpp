@@ -190,7 +190,9 @@ typedef uintptr vm_addr_t;
 #if REAL_ADDRESSING
 const uintptr VMBaseDiff = 0;
 #elif DIRECT_ADDRESSING
-#ifdef NATMEM_OFFSET
+#ifdef MEM_BULK
+extern uintptr VMBaseDiff;
+#elif defined(NATMEM_OFFSET)
 const uintptr VMBaseDiff = NATMEM_OFFSET;
 #endif
 // Wrap address to 32-bit if we are not using 33-bit addressing space
@@ -206,10 +208,12 @@ const uintptr VMBaseDiff = NATMEM_OFFSET;
 static inline uint8 * vm_do_get_real_address(vm_addr_t addr)
 {
 	uintptr a = vm_wrap_address(addr);
-#if defined(__APPLE__) && defined(__x86_64__)
+#if defined(__APPLE__) && defined(__x86_64__) || defined(MEM_BULK)
 	extern uint8 gZeroPage[0x3000], gKernelData[0x2000];
+#ifndef MEM_BULK
 	if (a < 0x3000) return &gZeroPage[a];
-	else if ((a & ~0x1fff) == 0x68ffe000 || (a & ~0x1fff) == 0x5fffe000) return &gKernelData[a & 0x1fff];
+#endif
+	if ((a & ~0x1fff) == 0x68ffe000 || (a & ~0x1fff) == 0x5fffe000) return &gKernelData[a & 0x1fff];
 #endif
 	return (uint8 *)(VMBaseDiff + a);
 }
