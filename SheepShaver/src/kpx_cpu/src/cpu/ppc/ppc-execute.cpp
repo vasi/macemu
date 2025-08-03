@@ -23,7 +23,9 @@
 #include <stdio.h>
 #include <math.h>
 #include <time.h>
-
+#ifdef __MINGW64__
+#include <fenv.h>
+#endif
 #include "cpu/vm.hpp"
 #include "cpu/ppc/ppc-cpu.hpp"
 #include "cpu/ppc/ppc-bitfields.hpp"

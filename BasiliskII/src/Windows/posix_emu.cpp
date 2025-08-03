@@ -1064,7 +1064,7 @@ int my_creat( const char *path, int mode )
 	return result;
 }
 
-int my_chsize( int fd, size_t sz )
+int my_chsize( int fd, unsigned int sz )
 {
 	DISABLE_ERRORS;
 	int result = chsize(fd,sz);

@@ -230,6 +230,14 @@ CPUSRCS="\
     ../kpx_cpu/src/utils/utils-cpuinfo.cpp"
 CPPFLAGS="$CPPFLAGS -I../kpx_cpu/include -I../kpx_cpu/src"
 
+
+case "$target_cpu" in
+x86_64* )
+  CXXFLAGS="$CXXFLAGS -DMEM_BULK -fpermissive"
+  WANT_JIT="no"
+  ;;
+esac
+
 dnl Enable JIT compiler, if possible
 USE_DYNGEN="no"
 USE_PREGENERATED_DYNGEN="no"

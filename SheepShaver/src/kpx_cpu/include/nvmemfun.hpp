@@ -112,7 +112,11 @@ public:
 	#define NVMEMFUN_THUNK_DEBUG 0
 	
 private:
+	#ifdef __MINGW64__
+	#define DO_CONVENTION_CALL_PF_PLACEHOLDER 0x123456789abcdef0
+	#else
 	#define DO_CONVENTION_CALL_PF_PLACEHOLDER 0x12345678
+	#endif
 
 	#define DO_CONVENTION_CALL_STATICS
 	static bool do_convention_call_init_done;
@@ -124,7 +128,11 @@ private:
 		if (do_convention_call_init_done) return;
 		
 		const int max_code_bytes = 100;
+		#ifdef __MINGW64__
+		const unsigned char last_code_byte_value = 0xff; // JMP
+		#else
 		const unsigned char last_code_byte_value = 0xc3;
+		#endif
 		
 		// figure out the size of the function
 		unsigned char * func_pos = (unsigned char *) &do_convention_call;

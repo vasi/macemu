@@ -33,8 +33,13 @@
    unsigned long hereunder is either 64-bit or 32-bit wide depending
    on the target.  */
 struct flag_struct {
+#ifdef __MINGW64__
+    unsigned long long cznv;
+    unsigned long long x;
+#else
     unsigned long cznv;
     unsigned long x;
+#endif
 };
 
 #define FLAGVAL_Z	0x40

@@ -63,7 +63,11 @@ HAVE_X86_64=no
 case "$target_cpu" in
   i386* | i486* | i586* | i686* | i786* ) HAVE_I386=yes;;
   powerpc* ) HAVE_POWERPC=yes;;
-  x86_64* ) HAVE_X86_64=yes;;
+  x86_64* )
+  HAVE_X86_64=yes
+  CXXFLAGS="$CXXFLAGS -fpermissive"
+  WANT_JIT=no
+  ;;
 esac
 
 dnl Checks for programs.
