@@ -334,6 +334,7 @@ if [[ "x$WANT_SDL" = "xyes" ]]; then
 
     if [[ "x$TEMP_WANT_SDL_VERSION_MAJOR" = "x3" ]]; then
       PKG_CHECK_MODULES([sdl3], [sdl3 >= 3.0], [
+        CFLAGS="$CFLAGS $sdl3_CFLAGS"
         CXXFLAGS="$CXXFLAGS $sdl3_CFLAGS"
         LIBS="$LIBS $sdl3_LIBS"
 	AC_DEFINE([USE_SDL3], [1], [Use SDL3])
@@ -344,6 +345,7 @@ if [[ "x$WANT_SDL" = "xyes" ]]; then
     fi
     if [[ "x$TEMP_WANT_SDL_VERSION_MAJOR" = "x2" ]]; then
       PKG_CHECK_MODULES([sdl2], [sdl2 >= 2.0], [
+        CFLAGS="$CFLAGS $sdl2_CFLAGS"
         CXXFLAGS="$CXXFLAGS $sdl2_CFLAGS"
         LIBS="$LIBS $sdl2_LIBS"
 	AC_DEFINE([USE_SDL2], [1], [Use SDL2])
