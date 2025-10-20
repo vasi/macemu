@@ -34,6 +34,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <pthread.h>
+#include <linux/sched.h>
 
 
 /* Thread stack size */
