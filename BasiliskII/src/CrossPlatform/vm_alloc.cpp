@@ -446,7 +446,10 @@ int vm_protect(void * addr, size_t size, int prot)
 #else
 #ifdef HAVE_MMAP_VM
 	int ret_code = mprotect((caddr_t)addr, size, prot);
-	return ret_code == 0 ? 0 : -1;
+	if (ret_code != 0)
+		return -1;
+	madvise((caddr_t)addr, size, MADV_PAGEOUT);
+	return 0;
 #else
 #ifdef HAVE_WIN32_VM
 	DWORD old_prot;
