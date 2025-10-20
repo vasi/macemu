@@ -128,6 +128,8 @@
 #if !SDL_VERSION_ATLEAST(3, 0, 0)
 #define SDL_PLATFORM_MACOS      __MACOSX__
 #endif
+#else
+#define SDL_VERSION_ATLEAST(a,b,c) 0
 #endif
 
 #ifndef USE_SDL_VIDEO
