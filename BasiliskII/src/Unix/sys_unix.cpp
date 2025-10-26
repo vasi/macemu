@@ -23,6 +23,7 @@
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <climits>
 
 #ifdef HAVE_AVAILABILITYMACROS_H
 #include <AvailabilityMacros.h>
