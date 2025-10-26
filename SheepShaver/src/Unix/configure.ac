@@ -29,15 +29,6 @@ AC_ARG_ENABLE(xf86-dga,     [  --enable-xf86-dga       use the XFree86 DGA exten
 AC_ARG_ENABLE(xf86-vidmode, [  --enable-xf86-vidmode   use the XFree86 VidMode extension [default=yes]], [WANT_XF86_VIDMODE=$enableval], [WANT_XF86_VIDMODE=yes])
 AC_ARG_ENABLE(vosf,         [  --enable-vosf           enable video on SEGV signals [default=yes]], [WANT_VOSF=$enableval], [WANT_VOSF=yes])
 AC_ARG_ENABLE(standalone-gui,[  --enable-standalone-gui enable a standalone GUI prefs editor [default=no]], [WANT_STANDALONE_GUI=$enableval], [WANT_STANDALONE_GUI=no])
-AC_ARG_WITH(esd,            [  --with-esd              support ESD for sound under Linux/FreeBSD [default=yes]], [WANT_ESD=$withval], [WANT_ESD=yes])
-AC_ARG_WITH(gtk,            [  --with-gtk              use GTK user interface [default=yes]],
-  [case "$withval" in
-   gtk1)      WANT_GTK="gtk";;
-   gtk|gtk2)  WANT_GTK="$withval";;
-   yes)       WANT_GTK="gtk2 gtk";;
-   *)         WANT_GTK="no";;
-   esac],
-  [WANT_GTK="gtk2 gtk"])
 AC_ARG_WITH(mon,            [  --with-mon              use mon as debugger [default=yes]], [WANT_MON=$withval], [WANT_MON=yes])
 AC_ARG_WITH(dgcc,           [  --with-dgcc=COMPILER    use C++ COMPILER to compile synthetic opcodes], [DYNGEN_CC=$withval])
 
@@ -241,65 +232,12 @@ if [[ "x$WANT_XF86_VIDMODE" = "xyes" ]]; then
   ])
 fi
 
-dnl We use GTK+ if possible.
 UISRCS=../dummy/prefs_editor_dummy.cpp
-case "x$WANT_GTK" in
-xgtk2*)
-  AM_PATH_GTK_2_0(1.3.15, [
-    GUI_CFLAGS="$GTK_CFLAGS"
-    GUI_LIBS="$GTK_LIBS"
-    WANT_GTK=gtk2
-  ], [
-    case "x${WANT_GTK}x" in
-    *gtkx)
-      AC_MSG_WARN([Could not find GTK+ 2.0, trying with GTK+ 1.2.])
-      WANT_GTK=gtk
-      ;;
-    *)
-      AC_MSG_WARN([Could not find GTK+, disabling user interface.])
-      WANT_GTK=no
-      ;;
-    esac
-  ])
-  ;;
-esac
-if [[ "x$WANT_GTK" = "xgtk" ]]; then
-  AM_PATH_GTK(1.2.0, [
-    GUI_CFLAGS="$GTK_CFLAGS"
-    GUI_LIBS="$GTK_LIBS"
-  ], [
-    AC_MSG_WARN([Could not find GTK+, disabling user interface.])
-    WANT_GTK=no
-  ])
-fi
-if [[ "x$WANT_GTK" != "xno" -a "x$WANT_STANDALONE_GUI" = "xno" ]]; then
-  AC_DEFINE(ENABLE_GTK, 1, [Define if using GTK.])
-  UISRCS=prefs_editor_gtk.cpp
-fi
 AC_SUBST(GUI_CFLAGS)
 AC_SUBST(GUI_LIBS)
 
-dnl Build external GUI if requested.
-if [[ "$WANT_STANDALONE_GUI" != "yes" ]]; then
-  WANT_STANDALONE_GUI=no
-fi
-if [[ "$WANT_GTK" = "no" ]]; then
-  WANT_STANDALONE_GUI=no
-fi
+WANT_STANDALONE_GUI=no
 AC_SUBST(STANDALONE_GUI, [$WANT_STANDALONE_GUI])
-
-dnl We use ESD if possible.
-if [[ "x$WANT_ESD" = "xyes" ]]; then
-  AM_PATH_ESD(0.2.8, [
-    AC_DEFINE(ENABLE_ESD, 1, [Define is using ESD.])
-    CFLAGS="$CFLAGS $ESD_CFLAGS"
-    CXXFLAGS="$CXXFLAGS $ESD_CFLAGS"
-    LIBS="$LIBS $ESD_LIBS"
-  ], [
-    AC_MSG_WARN([Could not find ESD, disabling ESD support.])
-    WANT_ESD=no
-  ])
-fi
 
 dnl We use 64-bit file size support if possible.
 AC_SYS_LARGEFILE
@@ -1522,8 +1460,6 @@ echo XFree86 VidMode support .......... : $WANT_XF86_VIDMODE
 echo Using PowerPC emulator ........... : $EMULATED_PPC
 echo Enable JIT compiler .............. : $WANT_JIT
 echo Enable video on SEGV signals ..... : $WANT_VOSF
-echo ESD sound support ................ : $WANT_ESD
-echo GTK user interface ............... : $WANT_GTK
 echo mon debugger support ............. : $WANT_MON
 echo Addressing mode .................. : $WANT_ADDRESSING_MODE
 echo Bad memory access recovery type .. : $sigsegv_recovery
