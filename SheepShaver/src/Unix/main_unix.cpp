@@ -225,8 +225,8 @@ static uintptr sig_stack = 0;				// Stack for PowerPC interrupt routine
 #else
 static struct sigaction sigsegv_action;		// Data access exception signal (of emulator thread)
 static struct sigaction sigill_action;		// Illegal instruction signal (of emulator thread)
-static struct sigaltstack sig_stack;		// Stack for signal handlers
-static struct sigaltstack extra_stack;		// Stack for SIGSEGV inside interrupt handler
+static stack_t sig_stack;		// Stack for signal handlers
+static stack_t extra_stack;		// Stack for SIGSEGV inside interrupt handler
 static bool emul_thread_fatal = false;		// Flag: MacOS thread crashed, tick thread shall dump debug output
 static sigregs sigsegv_regs;				// Register dump when crashed
 static const char *crash_reason = NULL;		// Reason of the crash (SIGSEGV, SIGBUS, SIGILL)
