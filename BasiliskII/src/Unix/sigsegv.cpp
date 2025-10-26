@@ -2256,13 +2256,21 @@ int main(void)
 	b_region = &&L_b_region1;
 	e_region = &&L_e_region1;
 #endif
+  volatile int label_hack = 3;
+	switch (label_hack) {
+ case 3:
  L_b_region1:
 	page[REF_INDEX] = REF_VALUE;
 	if (page[REF_INDEX] != REF_VALUE)
 	  exit(20);
 	page[REF_INDEX] = REF_VALUE;
 	BARRIER();
+	// fall-through
+ case 2:
  L_e_region1:
+  BARRIER();
+	break;
+ }
 
 	if (handler_called != 1)
 		return 5;
