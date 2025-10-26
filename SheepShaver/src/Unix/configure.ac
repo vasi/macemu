@@ -29,7 +29,6 @@ AC_ARG_ENABLE(xf86-dga,     [  --enable-xf86-dga       use the XFree86 DGA exten
 AC_ARG_ENABLE(xf86-vidmode, [  --enable-xf86-vidmode   use the XFree86 VidMode extension [default=yes]], [WANT_XF86_VIDMODE=$enableval], [WANT_XF86_VIDMODE=yes])
 AC_ARG_ENABLE(vosf,         [  --enable-vosf           enable video on SEGV signals [default=yes]], [WANT_VOSF=$enableval], [WANT_VOSF=yes])
 AC_ARG_ENABLE(standalone-gui,[  --enable-standalone-gui enable a standalone GUI prefs editor [default=no]], [WANT_STANDALONE_GUI=$enableval], [WANT_STANDALONE_GUI=no])
-AC_ARG_WITH(mon,            [  --with-mon              use mon as debugger [default=yes]], [WANT_MON=$withval], [WANT_MON=yes])
 AC_ARG_WITH(dgcc,           [  --with-dgcc=COMPILER    use C++ COMPILER to compile synthetic opcodes], [DYNGEN_CC=$withval])
 
 dnl Addressing mode
@@ -81,38 +80,6 @@ if [[ "x$EMULATED_PPC" = "xyes" ]]; then
   AC_DEFINE(EMULATED_PPC, 1, [Define if using a PowerPC CPU emulator.])
 fi
 
-dnl We use mon if possible.
-MONSRCS=
-case "x$WANT_MON" in
-x/* | x.*)
-  mon_srcdir=$WANT_MON
-  WANT_MON=yes
-  ;;
-xyes)
-  mon_srcdir=../../../mon/src
-  ;;
-esac
-if [[ "x$WANT_MON" = "xyes" ]]; then
-  AC_MSG_CHECKING(for mon)
-  if grep mon_init $mon_srcdir/mon.h >/dev/null 2>/dev/null; then
-    AC_MSG_RESULT(yes)
-    AC_DEFINE(ENABLE_MON, 1, [Define if using "mon".])
-    MONSRCS="$mon_srcdir/mon.cpp $mon_srcdir/mon_6502.cpp $mon_srcdir/mon_z80.cpp $mon_srcdir/mon_cmd.cpp $mon_srcdir/mon_lowmem.cpp $mon_srcdir/mon_disass.cpp $mon_srcdir/mon_ppc.cpp $mon_srcdir/disass/floatformat.c $mon_srcdir/disass/i386-dis.c $mon_srcdir/disass/m68k-dis.c $mon_srcdir/disass/m68k-opc.c"
-    CXXFLAGS="$CXXFLAGS -I$mon_srcdir -I$mon_srcdir/disass"
-    AC_CHECK_LIB(ncurses, tgetent, ,
-      AC_CHECK_LIB(termcap, tgetent, ,
-        AC_CHECK_LIB(termlib, tgetent, ,
-          AC_CHECK_LIB(terminfo, tgetent, ,
-            AC_CHECK_LIB(Hcurses, tgetent, ,
-              AC_CHECK_LIB(curses, tgetent))))))
-    AC_CHECK_LIB(readline, readline)
-    AC_CHECK_HEADERS(readline.h history.h readline/readline.h readline/history.h)
-  else
-    AC_MSG_RESULT(no)
-    AC_MSG_WARN([Could not find mon, ignoring --with-mon.])
-    WANT_MON=no
-  fi
-fi
 AC_SUBST(MONSRCS)
 
 dnl Checks for libraries.
@@ -245,7 +212,7 @@ AC_SYS_LARGEFILE
 dnl Checks for header files.
 AC_HEADER_STDC
 AC_HEADER_SYS_WAIT
-AC_CHECK_HEADERS(malloc.h stdint.h)
+AC_CHECK_HEADERS(malloc.h stdint.h sys/types.h)
 AC_CHECK_HEADERS(mach/vm_map.h mach/mach_init.h sys/mman.h)
 AC_CHECK_HEADERS(unistd.h fcntl.h byteswap.h dirent.h)
 AC_CHECK_HEADERS(sys/socket.h sys/ioctl.h sys/filio.h sys/bitypes.h sys/wait.h)
@@ -1460,7 +1427,6 @@ echo XFree86 VidMode support .......... : $WANT_XF86_VIDMODE
 echo Using PowerPC emulator ........... : $EMULATED_PPC
 echo Enable JIT compiler .............. : $WANT_JIT
 echo Enable video on SEGV signals ..... : $WANT_VOSF
-echo mon debugger support ............. : $WANT_MON
 echo Addressing mode .................. : $WANT_ADDRESSING_MODE
 echo Bad memory access recovery type .. : $sigsegv_recovery
 echo
