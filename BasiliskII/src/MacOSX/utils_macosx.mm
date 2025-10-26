@@ -80,11 +80,9 @@ void make_window_transparent(SDL_Window *window)
 		return;
 	}
 	NSWindow *cocoaWindow = get_nswindow(window);
-    NSView *sdlView = cocoaWindow.contentView;
-	sdlView.wantsLayer = YES;
-    sdlView.layer.backgroundColor = [NSColor clearColor].CGColor;
 	static bool observing;
     if (!observing) {
+		cocoaWindow.level = NSMainMenuWindowLevel + 1;
         NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
         [nc addObserverForName:NSWindowDidBecomeKeyNotification object:cocoaWindow queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification * _Nonnull note) {
             NSWindow *window = (NSWindow *)note.object;
