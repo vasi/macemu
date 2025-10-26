@@ -61,7 +61,7 @@
 
 
 // File handles are pointers to these structures
-struct file_handle {
+struct mac_file_handle {
 	char *name;			// Copy of device/file name
 	int fd;
 	bool is_file;		// Flag: plain file or /dev/something?
@@ -84,17 +84,17 @@ struct file_handle {
 
 // Open file handles
 struct open_file_handle {
-	file_handle *fh;
+	mac_file_handle *fh;
 	open_file_handle *next;
 };
 static open_file_handle *open_file_handles = NULL;
 
 // File handle of first floppy drive (for SysMountFirstFloppy())
-static file_handle *first_floppy = NULL;
+static mac_file_handle *first_floppy = NULL;
 
 // Prototypes
-static void cdrom_close(file_handle *fh);
-static bool cdrom_open(file_handle *fh, const char *path = NULL);
+static void cdrom_close(mac_file_handle *fh);
+static bool cdrom_open(mac_file_handle *fh, const char *path = NULL);
 
 
 /*
@@ -127,7 +127,7 @@ void SysExit(void)
  *  Manage open file handles
  */
 
-static void sys_add_file_handle(file_handle *fh)
+static void sys_add_file_handle(mac_file_handle *fh)
 {
 	open_file_handle *p = new open_file_handle;
 	p->fh = fh;
@@ -135,7 +135,7 @@ static void sys_add_file_handle(file_handle *fh)
 	open_file_handles = p;
 }
 
-static void sys_remove_file_handle(file_handle *fh)
+static void sys_remove_file_handle(mac_file_handle *fh)
 {
 	open_file_handle *p = open_file_handles;
 	open_file_handle *q = NULL;
@@ -183,7 +183,7 @@ void SysMediaArrived(const char *path, int type)
 	}
 
 	for (open_file_handle *p = open_file_handles; p != NULL; p = p->next) {
-		file_handle * const fh = p->fh;
+		mac_file_handle * const fh = p->fh;
 
 		// Re-open CD-ROM device
 		if (fh->is_cdrom && type == MEDIA_CD) {
@@ -207,7 +207,7 @@ void SysMediaRemoved(const char *path, int type)
 		return;
 
 	for (open_file_handle *p = open_file_handles; p != NULL; p = p->next) {
-		file_handle * const fh = p->fh;
+		mac_file_handle * const fh = p->fh;
 
 		// Mark media as not available
 		if (!fh->is_cdrom || !fh->is_media_present)
@@ -394,7 +394,7 @@ void SysAddSerialPrefs(void)
  *  Open CD-ROM device and initialize internal data
  */
 
-static bool cdrom_open_1(file_handle *fh)
+static bool cdrom_open_1(mac_file_handle *fh)
 {
 #if defined __MACOSX__
 	// In OS X, the device name is OK for sending ioctls to,
@@ -419,7 +419,7 @@ static bool cdrom_open_1(file_handle *fh)
 	return true;
 }
 
-bool cdrom_open(file_handle *fh, const char *path)
+bool cdrom_open(mac_file_handle *fh, const char *path)
 {
 	if (path)
 		fh->name = strdup(path);
@@ -435,7 +435,7 @@ bool cdrom_open(file_handle *fh, const char *path)
  *  Close a CD-ROM device
  */
 
-void cdrom_close(file_handle *fh)
+void cdrom_close(mac_file_handle *fh)
 {
 	if (fh->fd >= 0) {
 		close(fh->fd);
@@ -559,7 +559,7 @@ void *Sys_open(const char *name, bool read_only)
 		fd = open(name, O_RDONLY);
 	}
 	if (fd >= 0 || is_polled_media) {
-		file_handle *fh = new file_handle;
+		mac_file_handle *fh = new mac_file_handle;
 		fh->name = strdup(name);
 		fh->fd = fd;
 		fh->is_file = is_file;
@@ -639,7 +639,7 @@ void *Sys_open(const char *name, bool read_only)
 
 void Sys_close(void *arg)
 {
-	file_handle *fh = (file_handle *)arg;
+	mac_file_handle *fh = (mac_file_handle *)arg;
 	if (!fh)
 		return;
 
@@ -662,7 +662,7 @@ void Sys_close(void *arg)
 
 size_t Sys_read(void *arg, void *buffer, loff_t offset, size_t length)
 {
-	file_handle *fh = (file_handle *)arg;
+	mac_file_handle *fh = (mac_file_handle *)arg;
 	if (!fh)
 		return 0;
 
@@ -682,7 +682,7 @@ size_t Sys_read(void *arg, void *buffer, loff_t offset, size_t length)
 
 size_t Sys_write(void *arg, void *buffer, loff_t offset, size_t length)
 {
-	file_handle *fh = (file_handle *)arg;
+	mac_file_handle *fh = (mac_file_handle *)arg;
 	if (!fh)
 		return 0;
 
@@ -701,7 +701,7 @@ size_t Sys_write(void *arg, void *buffer, loff_t offset, size_t length)
 
 loff_t SysGetFileSize(void *arg)
 {
-	file_handle *fh = (file_handle *)arg;
+	mac_file_handle *fh = (mac_file_handle *)arg;
 	if (!fh)
 		return true;
 
@@ -737,7 +737,7 @@ loff_t SysGetFileSize(void *arg)
 
 void SysEject(void *arg)
 {
-	file_handle *fh = (file_handle *)arg;
+	mac_file_handle *fh = (mac_file_handle *)arg;
 	if (!fh)
 		return;
 
@@ -795,7 +795,7 @@ void SysEject(void *arg)
 
 bool SysFormat(void *arg)
 {
-	file_handle *fh = (file_handle *)arg;
+	mac_file_handle *fh = (mac_file_handle *)arg;
 	if (!fh)
 		return false;
 
@@ -810,7 +810,7 @@ bool SysFormat(void *arg)
 
 bool SysIsReadOnly(void *arg)
 {
-	file_handle *fh = (file_handle *)arg;
+	mac_file_handle *fh = (mac_file_handle *)arg;
 	if (!fh)
 		return true;
 
@@ -834,7 +834,7 @@ bool SysIsReadOnly(void *arg)
 
 bool SysIsFixedDisk(void *arg)
 {
-	file_handle *fh = (file_handle *)arg;
+	mac_file_handle *fh = (mac_file_handle *)arg;
 	if (!fh)
 		return true;
 
@@ -853,7 +853,7 @@ bool SysIsFixedDisk(void *arg)
 
 bool SysIsDiskInserted(void *arg)
 {
-	file_handle *fh = (file_handle *)arg;
+	mac_file_handle *fh = (mac_file_handle *)arg;
 	if (!fh)
 		return false;
 
@@ -912,7 +912,7 @@ bool SysIsDiskInserted(void *arg)
 
 void SysPreventRemoval(void *arg)
 {
-	file_handle *fh = (file_handle *)arg;
+	mac_file_handle *fh = (mac_file_handle *)arg;
 	if (!fh)
 		return;
 
@@ -929,7 +929,7 @@ void SysPreventRemoval(void *arg)
 
 void SysAllowRemoval(void *arg)
 {
-	file_handle *fh = (file_handle *)arg;
+	mac_file_handle *fh = (mac_file_handle *)arg;
 	if (!fh)
 		return;
 
@@ -946,7 +946,7 @@ void SysAllowRemoval(void *arg)
 
 bool SysCDReadTOC(void *arg, uint8 *toc)
 {
-	file_handle *fh = (file_handle *)arg;
+	mac_file_handle *fh = (mac_file_handle *)arg;
 	if (!fh)
 		return false;
 
@@ -1087,7 +1087,7 @@ bool SysCDReadTOC(void *arg, uint8 *toc)
 
 bool SysCDGetPosition(void *arg, uint8 *pos)
 {
-	file_handle *fh = (file_handle *)arg;
+	mac_file_handle *fh = (mac_file_handle *)arg;
 	if (!fh)
 		return false;
 
@@ -1152,7 +1152,7 @@ bool SysCDGetPosition(void *arg, uint8 *pos)
 
 bool SysCDPlay(void *arg, uint8 start_m, uint8 start_s, uint8 start_f, uint8 end_m, uint8 end_s, uint8 end_f)
 {
-	file_handle *fh = (file_handle *)arg;
+	mac_file_handle *fh = (mac_file_handle *)arg;
 	if (!fh)
 		return false;
 
@@ -1189,7 +1189,7 @@ bool SysCDPlay(void *arg, uint8 start_m, uint8 start_s, uint8 start_f, uint8 end
 
 bool SysCDPause(void *arg)
 {
-	file_handle *fh = (file_handle *)arg;
+	mac_file_handle *fh = (mac_file_handle *)arg;
 	if (!fh)
 		return false;
 
@@ -1212,7 +1212,7 @@ bool SysCDPause(void *arg)
 
 bool SysCDResume(void *arg)
 {
-	file_handle *fh = (file_handle *)arg;
+	mac_file_handle *fh = (mac_file_handle *)arg;
 	if (!fh)
 		return false;
 
@@ -1235,7 +1235,7 @@ bool SysCDResume(void *arg)
 
 bool SysCDStop(void *arg, uint8 lead_out_m, uint8 lead_out_s, uint8 lead_out_f)
 {
-	file_handle *fh = (file_handle *)arg;
+	mac_file_handle *fh = (mac_file_handle *)arg;
 	if (!fh)
 		return false;
 
@@ -1258,7 +1258,7 @@ bool SysCDStop(void *arg, uint8 lead_out_m, uint8 lead_out_s, uint8 lead_out_f)
 
 bool SysCDScan(void *arg, uint8 start_m, uint8 start_s, uint8 start_f, bool reverse)
 {
-	file_handle *fh = (file_handle *)arg;
+	mac_file_handle *fh = (mac_file_handle *)arg;
 	if (!fh)
 		return false;
 
@@ -1273,7 +1273,7 @@ bool SysCDScan(void *arg, uint8 start_m, uint8 start_s, uint8 start_f, bool reve
 
 void SysCDSetVolume(void *arg, uint8 left, uint8 right)
 {
-	file_handle *fh = (file_handle *)arg;
+	mac_file_handle *fh = (mac_file_handle *)arg;
 	if (!fh)
 		return;
 
@@ -1299,7 +1299,7 @@ void SysCDSetVolume(void *arg, uint8 left, uint8 right)
 
 void SysCDGetVolume(void *arg, uint8 &left, uint8 &right)
 {
-	file_handle *fh = (file_handle *)arg;
+	mac_file_handle *fh = (mac_file_handle *)arg;
 	if (!fh)
 		return;
 
