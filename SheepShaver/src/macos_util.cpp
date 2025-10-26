@@ -192,7 +192,7 @@ uint32 FindLibSymbol(char *lib_str, char *sym_str)
 			0x3f, 0x3c, 0x00, 0x01,				// (GetSharedLibrary)
 			0xaa, 0x5a,							// CFMDispatch
 			0x30, 0x1f,							// move.w	(a7)+,d0
-			M68K_RTS >> 8, M68K_RTS
+			M68K_RTS >> 8, M68K_RTS & 0xFF
 		};
 		BUILD_SHEEPSHAVER_PROCEDURE(proc1);
 		r.a[0] = lib.addr();
@@ -214,7 +214,7 @@ uint32 FindLibSymbol(char *lib_str, char *sym_str)
 			0x3f, 0x3c, 0x00, 0x05,		// (FindSymbol)
 			0xaa, 0x5a,					// CFMDispatch
 			0x30, 0x1f,					// move.w	(a7)+,d0
-			M68K_RTS >> 8, M68K_RTS
+			M68K_RTS >> 8, M68K_RTS & 0xFF
 		};
 		BUILD_SHEEPSHAVER_PROCEDURE(proc2);
 		r.d[0] = conn_id.value();

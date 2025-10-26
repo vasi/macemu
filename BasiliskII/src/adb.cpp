@@ -387,7 +387,7 @@ void ADBInterrupt(void)
 				0x2f, 0x01,		// move.l d1,-(sp)
 				0x70, 0x01,		// moveq #1,d0 (MoveTo)
 				0xaa, 0xdb,		// CursorDeviceDispatch
-				M68K_RTS >> 8, M68K_RTS
+				M68K_RTS >> 8, M68K_RTS & 0xFF
 			};
 			BUILD_SHEEPSHAVER_PROCEDURE(proc);
 			r.a[0] = ReadMacInt32(mouse_base + 4);
