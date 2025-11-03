@@ -35,6 +35,7 @@
 #include <linux/major.h>
 #include <linux/kdev_t.h>
 #include <dirent.h>
+#include <limits.h>
 #endif
 
 #if defined(__FreeBSD__) || defined(__NetBSD__)
