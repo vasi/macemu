@@ -1619,6 +1619,11 @@ void sigusr2_handler(int sig, siginfo_t *sip, void *scp)
  *  SIGSEGV handler
  */
 
+	struct sigsegv_info_t {
+		sigsegv_address_t addr;
+		sigsegv_address_t pc;
+	};
+
 #if !EMULATED_PPC
 static void sigsegv_handler(int sig, siginfo_t *sip, void *scp)
 {
@@ -1640,10 +1645,6 @@ static void sigsegv_handler(int sig, siginfo_t *sip, void *scp)
 	// Handle screen fault
 	// XXX: don't redefine locally?
 #if SIGSEGV_CHECK_VERSION(1,0,0)
-	struct sigsegv_info_t {
-		sigsegv_address_t addr;
-		sigsegv_address_t pc;
-	};
 	sigsegv_info_t si;
 	si.addr = (sigsegv_address_t)addr;
 	si.pc = (sigsegv_address_t)r->pc();
