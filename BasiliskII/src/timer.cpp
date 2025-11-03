@@ -294,7 +294,7 @@ void TimerExit(void)
 {
 #if PRECISE_TIMING
 	// Quit timer thread
-	if (timer_thread > 0) {
+	if (timer_thread != 0) {
 #ifdef PRECISE_TIMING_BEOS
 		status_t l;
 		thread_active = false;
