@@ -101,27 +101,6 @@ xyes)
   mon_srcdir=../../../mon/src
   ;;
 esac
-if [[ "x$WANT_MON" = "xyes" ]]; then
-  AC_MSG_CHECKING(for mon)
-  if grep mon_init $mon_srcdir/mon.h >/dev/null 2>/dev/null; then
-    AC_MSG_RESULT(yes)
-    AC_DEFINE(ENABLE_MON, 1, [Define if using "mon".])
-    MONSRCS="$mon_srcdir/mon.cpp $mon_srcdir/mon_6502.cpp $mon_srcdir/mon_z80.cpp $mon_srcdir/mon_cmd.cpp $mon_srcdir/mon_lowmem.cpp $mon_srcdir/mon_disass.cpp $mon_srcdir/mon_ppc.cpp $mon_srcdir/disass/floatformat.c $mon_srcdir/disass/i386-dis.c $mon_srcdir/disass/m68k-dis.c $mon_srcdir/disass/m68k-opc.c"
-    CXXFLAGS="$CXXFLAGS -I$mon_srcdir -I$mon_srcdir/disass"
-    AC_CHECK_LIB(ncurses, tgetent, ,
-      AC_CHECK_LIB(termcap, tgetent, ,
-        AC_CHECK_LIB(termlib, tgetent, ,
-          AC_CHECK_LIB(terminfo, tgetent, ,
-            AC_CHECK_LIB(Hcurses, tgetent, ,
-              AC_CHECK_LIB(curses, tgetent))))))
-    AC_CHECK_LIB(readline, readline)
-    AC_CHECK_HEADERS(readline.h history.h readline/readline.h readline/history.h)
-  else
-    AC_MSG_RESULT(no)
-    AC_MSG_WARN([Could not find mon, ignoring --with-mon.])
-    WANT_MON=no
-  fi
-fi
 AC_SUBST(MONSRCS)
 
 dnl Checks for libraries.
@@ -245,11 +224,6 @@ dnl We use GTK+ if possible.
 UISRCS=../dummy/prefs_editor_dummy.cpp
 case "x$WANT_GTK" in
 xgtk2*)
-  AM_PATH_GTK_2_0(1.3.15, [
-    GUI_CFLAGS="$GTK_CFLAGS"
-    GUI_LIBS="$GTK_LIBS"
-    WANT_GTK=gtk2
-  ], [
     case "x${WANT_GTK}x" in
     *gtkx)
       AC_MSG_WARN([Could not find GTK+ 2.0, trying with GTK+ 1.2.])
@@ -260,17 +234,11 @@ xgtk2*)
       WANT_GTK=no
       ;;
     esac
-  ])
   ;;
 esac
 if [[ "x$WANT_GTK" = "xgtk" ]]; then
-  AM_PATH_GTK(1.2.0, [
-    GUI_CFLAGS="$GTK_CFLAGS"
-    GUI_LIBS="$GTK_LIBS"
-  ], [
     AC_MSG_WARN([Could not find GTK+, disabling user interface.])
     WANT_GTK=no
-  ])
 fi
 if [[ "x$WANT_GTK" != "xno" -a "x$WANT_STANDALONE_GUI" = "xno" ]]; then
   AC_DEFINE(ENABLE_GTK, 1, [Define if using GTK.])
@@ -290,15 +258,8 @@ AC_SUBST(STANDALONE_GUI, [$WANT_STANDALONE_GUI])
 
 dnl We use ESD if possible.
 if [[ "x$WANT_ESD" = "xyes" ]]; then
-  AM_PATH_ESD(0.2.8, [
-    AC_DEFINE(ENABLE_ESD, 1, [Define is using ESD.])
-    CFLAGS="$CFLAGS $ESD_CFLAGS"
-    CXXFLAGS="$CXXFLAGS $ESD_CFLAGS"
-    LIBS="$LIBS $ESD_LIBS"
-  ], [
     AC_MSG_WARN([Could not find ESD, disabling ESD support.])
     WANT_ESD=no
-  ])
 fi
 
 dnl We use 64-bit file size support if possible.
