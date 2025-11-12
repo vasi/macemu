@@ -125,6 +125,8 @@
 #ifdef USE_SDL
 #include <SDL.h>
 #include <string>
+#else
+# define SDL_VERSION_ATLEAST(a,b,c) 0
 #endif
 
 #ifndef USE_SDL_VIDEO
