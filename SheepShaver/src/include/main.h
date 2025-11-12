@@ -77,4 +77,12 @@ extern void TriggerInterrupt(void);							// Trigger SIGUSR1 interrupt in emulat
 extern void DisableInterrupt(void);							// Disable SIGUSR1 interrupt (can be nested)
 extern void EnableInterrupt(void);							// Enable SIGUSR1 interrupt (can be nested)
 
+// Hack for unhappy linkers
+#if !EMULATED_PPC
+extern "C" {
+	pthread_t xpthread_self(void);
+}
+#define pthread_self xpthread_self
+#endif
+
 #endif
