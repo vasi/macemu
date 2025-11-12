@@ -88,4 +88,12 @@ constexpr size_t lengthof(T (& a)[size])
 #define lengthof(a) (sizeof(a) / sizeof(a[0]))
 #endif
 
+// Hack for unhappy linkers
+#if !EMULATED_PPC
+extern "C" {
+	pthread_t xpthread_self(void);
+}
+#define pthread_self xpthread_self
+#endif
+
 #endif
