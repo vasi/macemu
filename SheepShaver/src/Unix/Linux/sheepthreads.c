@@ -77,7 +77,7 @@ typedef struct {
  *  Return pthread ID of self
  */
 
-pthread_t pthread_self(void)
+pthread_t xpthread_self(void)
 {
 	return getpid();
 }
