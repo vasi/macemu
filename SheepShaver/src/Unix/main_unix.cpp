@@ -1767,6 +1767,7 @@ void EnableInterrupt(void)
  */
 
 #if !EMULATED_PPC
+__attribute__((no_stack_protector))
 void sigusr2_handler(int sig, siginfo_t *sip, void *scp)
 {
 	machine_regs *r = MACHINE_REGISTERS(scp);
@@ -1874,6 +1875,7 @@ void sigusr2_handler(int sig, siginfo_t *sip, void *scp)
  */
 
 #if !EMULATED_PPC
+__attribute__((no_stack_protector))
 static void sigsegv_handler(int sig, siginfo_t *sip, void *scp)
 {
 	machine_regs *r = MACHINE_REGISTERS(scp);
@@ -2136,7 +2138,7 @@ rti:;
 /*
  *  SIGILL handler
  */
-
+__attribute__((no_stack_protector))
 static void sigill_handler(int sig, siginfo_t *sip, void *scp)
 {
 	machine_regs *r = MACHINE_REGISTERS(scp);
