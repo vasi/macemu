@@ -556,3 +556,7 @@ void audio_set_speaker_volume(uint32 vol)
 		ioctl(mixer_fd, SOUND_MIXER_WRITE_VOLUME, &p);
 	}
 }
+
+void PlayStartupSound() {
+	// Not implemented
+}
