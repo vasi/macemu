@@ -1533,10 +1533,9 @@ static void *tick_func(void *arg)
 
 			// Yes, dump registers
 			sigregs *r = &sigsegv_regs;
-			char str[256];
 			if (crash_reason == NULL)
 				crash_reason = "SIGSEGV";
-			sprintf(str, "%s\n"
+			printf("%s\n"
 				"   pc %08lx     lr %08lx    ctr %08lx    msr %08lx\n"
 				"  xer %08lx     cr %08lx  \n"
 				"   r0 %08lx     r1 %08lx     r2 %08lx     r3 %08lx\n"
@@ -1558,7 +1557,6 @@ static void *tick_func(void *arg)
 				r->gpr[20], r->gpr[21], r->gpr[22], r->gpr[23],
 				r->gpr[24], r->gpr[25], r->gpr[26], r->gpr[27],
 				r->gpr[28], r->gpr[29], r->gpr[30], r->gpr[31]);
-			printf(str);
 			VideoQuitFullScreen();
 
 #ifdef ENABLE_MON
