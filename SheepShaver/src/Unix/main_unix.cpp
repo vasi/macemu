@@ -85,6 +85,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <inttypes.h>
 #include <pthread.h>
 #include <sys/mman.h>
 #include <sys/ipc.h>
@@ -1536,16 +1537,16 @@ static void *tick_func(void *arg)
 			if (crash_reason == NULL)
 				crash_reason = "SIGSEGV";
 			printf("%s\n"
-				"   pc %08lx     lr %08lx    ctr %08lx    msr %08lx\n"
-				"  xer %08lx     cr %08lx  \n"
-				"   r0 %08lx     r1 %08lx     r2 %08lx     r3 %08lx\n"
-				"   r4 %08lx     r5 %08lx     r6 %08lx     r7 %08lx\n"
-				"   r8 %08lx     r9 %08lx    r10 %08lx    r11 %08lx\n"
-				"  r12 %08lx    r13 %08lx    r14 %08lx    r15 %08lx\n"
-				"  r16 %08lx    r17 %08lx    r18 %08lx    r19 %08lx\n"
-				"  r20 %08lx    r21 %08lx    r22 %08lx    r23 %08lx\n"
-				"  r24 %08lx    r25 %08lx    r26 %08lx    r27 %08lx\n"
-				"  r28 %08lx    r29 %08lx    r30 %08lx    r31 %08lx\n",
+				"   pc %08" PRIx32 "     lr %08" PRIx32 "    ctr %08" PRIx32 "    msr %08" PRIx32 "\n"
+				"  xer %08" PRIx32 "     cr %08" PRIx32 "  \n"
+				"   r0 %08" PRIx32 "     r1 %08" PRIx32 "     r2 %08" PRIx32 "     r3 %08" PRIx32 "\n"
+				"   r4 %08" PRIx32 "     r5 %08" PRIx32 "     r6 %08" PRIx32 "     r7 %08" PRIx32 "\n"
+				"   r8 %08" PRIx32 "     r9 %08" PRIx32 "    r10 %08" PRIx32 "    r11 %08" PRIx32 "\n"
+				"  r12 %08" PRIx32 "    r13 %08" PRIx32 "    r14 %08" PRIx32 "    r15 %08" PRIx32 "\n"
+				"  r16 %08" PRIx32 "    r17 %08" PRIx32 "    r18 %08" PRIx32 "    r19 %08" PRIx32 "\n"
+				"  r20 %08" PRIx32 "    r21 %08" PRIx32 "    r22 %08" PRIx32 "    r23 %08" PRIx32 "\n"
+				"  r24 %08" PRIx32 "    r25 %08" PRIx32 "    r26 %08" PRIx32 "    r27 %08" PRIx32 "\n"
+				"  r28 %08" PRIx32 "    r29 %08" PRIx32 "    r30 %08" PRIx32 "    r31 %08" PRIx32 "\n",
 				crash_reason,
 				r->nip, r->link, r->ctr, r->msr,
 				r->xer, r->ccr,
@@ -2096,11 +2097,11 @@ static void sigsegv_handler(int sig, siginfo_t *sip, void *scp)
 	// For all other errors, jump into debugger (sort of...)
 	crash_reason = (sig == SIGBUS) ? "SIGBUS" : "SIGSEGV";
 	if (!ready_for_signals) {
-		printf("%s\n");
+		printf("%s\n", crash_reason);
 		printf(" sigcontext %p, machine_regs %p\n", scp, r);
 		printf(
-			"   pc %08lx     lr %08lx    ctr %08lx    msr %08lx\n"
-			"  xer %08lx     cr %08lx  \n"
+			"   pc %08lx     lr %08" PRIx32 "    ctr %08" PRIx32 "    msr %08" PRIx32 "\n"
+			"  xer %08" PRIx32 "     cr %08lx  \n"
 			"   r0 %08lx     r1 %08lx     r2 %08lx     r3 %08lx\n"
 			"   r4 %08lx     r5 %08lx     r6 %08lx     r7 %08lx\n"
 			"   r8 %08lx     r9 %08lx    r10 %08lx    r11 %08lx\n"
@@ -2109,7 +2110,6 @@ static void sigsegv_handler(int sig, siginfo_t *sip, void *scp)
 			"  r20 %08lx    r21 %08lx    r22 %08lx    r23 %08lx\n"
 			"  r24 %08lx    r25 %08lx    r26 %08lx    r27 %08lx\n"
 			"  r28 %08lx    r29 %08lx    r30 %08lx    r31 %08lx\n",
-			crash_reason,
 			r->pc(), r->lr(), r->ctr(), r->msr(),
 			r->xer(), r->cr(),
 			r->gpr(0), r->gpr(1), r->gpr(2), r->gpr(3),
@@ -2271,11 +2271,11 @@ power_inst:		sprintf(str, GetString(STR_POWER_INSTRUCTION_ERR), r->pc(), r->gpr(
 	// For all other errors, jump into debugger (sort of...)
 	crash_reason = "SIGILL";
 	if (!ready_for_signals) {
-		printf("%s\n");
+		printf("%s\n", crash_reason);
 		printf(" sigcontext %p, machine_regs %p\n", scp, r);
 		printf(
-			"   pc %08lx     lr %08lx    ctr %08lx    msr %08lx\n"
-			"  xer %08lx     cr %08lx  \n"
+			"   pc %08lx     lr %08" PRIx32 "    ctr %08" PRIx32 "    msr %08" PRIx32 "\n"
+			"  xer %08" PRIx32 "     cr %08lx  \n"
 			"   r0 %08lx     r1 %08lx     r2 %08lx     r3 %08lx\n"
 			"   r4 %08lx     r5 %08lx     r6 %08lx     r7 %08lx\n"
 			"   r8 %08lx     r9 %08lx    r10 %08lx    r11 %08lx\n"
@@ -2284,7 +2284,6 @@ power_inst:		sprintf(str, GetString(STR_POWER_INSTRUCTION_ERR), r->pc(), r->gpr(
 			"  r20 %08lx    r21 %08lx    r22 %08lx    r23 %08lx\n"
 			"  r24 %08lx    r25 %08lx    r26 %08lx    r27 %08lx\n"
 			"  r28 %08lx    r29 %08lx    r30 %08lx    r31 %08lx\n",
-			crash_reason,
 			r->pc(), r->lr(), r->ctr(), r->msr(),
 			r->xer(), r->cr(),
 			r->gpr(0), r->gpr(1), r->gpr(2), r->gpr(3),
