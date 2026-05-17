@@ -210,6 +210,23 @@ uint32 ROMEnd;
 // vde switch variable
 char* vde_sock;
 
+// Debug: count signal handler invocations
+volatile int sigusr2_count = 0;
+volatile int sigusr2_mode68k = 0;
+volatile int sigusr2_mode_native = 0;
+volatile int sigusr2_mode_emulop = 0;
+volatile int sigusr2_irq_nest = 0;
+volatile uint32 last_68k_pc = 0;
+volatile uint32 last_68k_guest_pc = 0;
+volatile uint32 last_68k_a0 = 0;
+volatile uint32 last_68k_a4 = 0;
+volatile uint32 last_68k_d0 = 0;
+volatile uint32 last_68k_d1 = 0;
+volatile uint32 last_68k_d2 = 0;
+volatile uint32 last_68k_d4 = 0;
+volatile uint32 last_68k_d5 = 0;
+volatile int sigsegv_count = 0;
+
 #if defined(__APPLE__) && defined(__x86_64__) || defined(MEM_BULK)
 uint8 gZeroPage[0x3000], gKernelData[0x2000];
 #endif
@@ -1577,6 +1594,12 @@ static void *tick_func(void *arg)
 		if (++tick_counter > 60) {
 			tick_counter = 0;
 			WriteMacInt32(0x20c, TimerDateTime());
+			// Debug: print signal handler count
+			fprintf(stderr, "tick: total=%d 68k=%d native=%d emulop=%d irq_nest=%d ppc_pc=%08x 68k_pc=%08x segv=%d\n"
+				"      68k: a0=%08x a4=%08x d0=%08x d1=%08x d2=%08x d4=%08x d5=%08x\n",
+				sigusr2_count, sigusr2_mode68k, sigusr2_mode_native,
+				sigusr2_mode_emulop, sigusr2_irq_nest, last_68k_pc, last_68k_guest_pc, sigsegv_count,
+				last_68k_a0, last_68k_a4, last_68k_d0, last_68k_d1, last_68k_d2, last_68k_d4, last_68k_d5);
 		}
 
 		// Trigger 60Hz interrupt
@@ -1772,6 +1795,7 @@ void EnableInterrupt(void)
 __attribute__((no_stack_protector))
 void sigusr2_handler(int sig, siginfo_t *sip, void *scp)
 {
+	sigusr2_count++;
 	machine_regs *r = MACHINE_REGISTERS(scp);
 
 #ifdef SYSTEM_CLOBBERS_R2
@@ -1789,8 +1813,10 @@ void sigusr2_handler(int sig, siginfo_t *sip, void *scp)
 #endif
 
 	// Do nothing if interrupts are disabled
-	if (*(int32 *)XLM_IRQ_NEST > 0)
+	if (*(int32 *)XLM_IRQ_NEST > 0) {
+		sigusr2_irq_nest++;
 		return;
+	}
 
 	// Disable MacOS stack sniffer
 	WriteMacInt32(0x110, 0);
@@ -1798,6 +1824,16 @@ void sigusr2_handler(int sig, siginfo_t *sip, void *scp)
 	// Interrupt action depends on current run mode
 	switch (ReadMacInt32(XLM_RUN_MODE)) {
 		case MODE_68K:
+			sigusr2_mode68k++;
+			last_68k_pc = r->pc();
+			last_68k_guest_pc = r->gpr(24);
+			last_68k_a0 = r->gpr(16);
+			last_68k_a4 = r->gpr(20);
+			last_68k_d0 = r->gpr(8);
+			last_68k_d1 = r->gpr(9);
+			last_68k_d2 = r->gpr(10);
+			last_68k_d4 = r->gpr(12);
+			last_68k_d5 = r->gpr(13);
 			// 68k emulator active, trigger 68k interrupt level 1
 			WriteMacInt16(ReadMacInt32(KERNEL_DATA_BASE + 0x67c), 1);
 			r->cr() |= ReadMacInt32(KERNEL_DATA_BASE + 0x674);
@@ -1805,6 +1841,7 @@ void sigusr2_handler(int sig, siginfo_t *sip, void *scp)
 
 #if INTERRUPTS_IN_NATIVE_MODE
 		case MODE_NATIVE:
+			sigusr2_mode_native++;
 			// 68k emulator inactive, in nanokernel?
 			if (r->gpr(1) != KernelDataAddr) {
 
@@ -1832,6 +1869,7 @@ void sigusr2_handler(int sig, siginfo_t *sip, void *scp)
 
 #if INTERRUPTS_IN_EMUL_OP_MODE
 		case MODE_EMUL_OP:
+			sigusr2_mode_emulop++;
 			// 68k emulator active, within EMUL_OP routine, execute 68k interrupt routine directly when interrupt level is 0
 			if ((ReadMacInt32(XLM_68K_R25) & 7) == 0) {
 
@@ -1880,6 +1918,7 @@ void sigusr2_handler(int sig, siginfo_t *sip, void *scp)
 __attribute__((no_stack_protector))
 static void sigsegv_handler(int sig, siginfo_t *sip, void *scp)
 {
+	sigsegv_count++;
 	machine_regs *r = MACHINE_REGISTERS(scp);
 
 	// Get effective address
