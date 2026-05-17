@@ -29,6 +29,7 @@
 #include "sysdeps.h"
 #include "rom_patches.h"
 #include "main.h"
+#include "dcbz_trap.h"
 #include "prefs.h"
 #include "cpu_emulation.h"
 #include "emul_op.h"
@@ -711,6 +712,14 @@ bool PatchROM(void)
 	if (!patch_68k_emul()) return false;
 	if (!patch_nanokernel()) return false;
 	if (!patch_68k()) return false;
+
+	// Replace every dcbz in the decoded ROM with a td-trap that sigill_handler
+	// will emulate as a proper 32-byte zero (see dcbz_trap.h). Only needed on
+	// CPUs where dcbz over-zeroes (PPC970/G5); a no-op otherwise.
+	if (dcbz_needs_emulation()) {
+		int n = dcbz_trap_patch_range(ROMBaseHost, ROM_SIZE);
+		D(bug("[dcbz-trap] patched %d dcbz in ROM\n", n));
+	}
 
 #ifdef M68K_BREAK_POINT
 	// Install 68k breakpoint

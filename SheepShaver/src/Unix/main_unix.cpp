@@ -82,6 +82,7 @@
 #include <fcntl.h>
 #include <time.h>
 #include <errno.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -97,6 +98,7 @@
 #include "sysdeps.h"
 #include "main.h"
 #include "version.h"
+#include "dcbz_trap.h"
 #include "prefs.h"
 #include "prefs_editor.h"
 #include "cpu_emulation.h"
@@ -815,6 +817,8 @@ int main(int argc, char **argv)
 	// Get r13 register
 	R13 = get_r13();
 #endif
+	// Decide once whether we need 32-byte dcbz emulation (see dcbz_trap.h).
+	dcbz_trap_init();
 #endif
 
 #if SDL_PLATFORM_MACOS
@@ -1098,10 +1102,19 @@ int main(int argc, char **argv)
 #endif
 	}
 #if !EMULATED_PPC
-	if (vm_protect(RAMBaseHost, RAMSize, VM_PAGE_READ | VM_PAGE_WRITE | VM_PAGE_EXECUTE) < 0) {
-		sprintf(str, GetString(STR_RAM_MMAP_ERR), strerror(errno));
-		ErrorAlert(str);
-		goto quit;
+	// If dcbz over-zeroes on this CPU (PPC970/G5), allocate Mac RAM as RW only
+	// so first-execute on each page traps to sigsegv_handler — see dcbz_trap.h.
+	// On legacy CPUs we keep the original RWX so MacOS code runs without fault
+	// overhead.
+	{
+		int prot = VM_PAGE_READ | VM_PAGE_WRITE;
+		if (!dcbz_needs_emulation())
+			prot |= VM_PAGE_EXECUTE;
+		if (vm_protect(RAMBaseHost, RAMSize, prot) < 0) {
+			sprintf(str, GetString(STR_RAM_MMAP_ERR), strerror(errno));
+			ErrorAlert(str);
+			goto quit;
+		}
 	}
 #endif
 	ram_area_mapped = true;
@@ -1510,6 +1523,7 @@ static void *nvram_func(void *arg)
  */
 
 bool tick_inhibit;
+
 static void *tick_func(void *arg)
 {
 	int tick_counter = 0;
@@ -1873,6 +1887,94 @@ void sigusr2_handler(int sig, siginfo_t *sip, void *scp)
 
 
 /*
+ *  dcbz-emulation runtime (see dcbz_trap.h for the design)
+ *
+ *  On PPC970/G5 the dcbz instruction zeroes a 128-byte cache line, but Mac
+ *  code expects G3/G4 32-byte behavior. We detect over-zeroing at startup,
+ *  and if present we replace every dcbz (in ROM at load time, in RAM
+ *  lazily on first execute) with a `td 0, RA, RB` trap that the SIGILL
+ *  handler emulates as a 32-byte zero.
+ */
+
+static bool s_dcbz_init_done = false;
+static bool s_dcbz_needs_emul = false;
+
+static bool probe_dcbz_zeroes_more_than_32(void)
+{
+	void *raw;
+	if (posix_memalign(&raw, 256, 512) != 0)
+		return false;  // can't probe; assume legacy
+	uint8 *buf = (uint8 *)raw;
+	memset(buf, 0xAA, 512);
+	uint8 *target = buf + 192;  // safely inside, well away from page boundary
+	__asm__ __volatile__("dcbz 0, %0" :: "r"(target) : "memory");
+	int span = 0;
+	for (int i = 0; i < 512; i++) if (buf[i] == 0) span++;
+	free(raw);
+	return span > 32;
+}
+
+extern "C" bool dcbz_trap_init(void)
+{
+	if (!s_dcbz_init_done) {
+		s_dcbz_needs_emul = probe_dcbz_zeroes_more_than_32();
+		s_dcbz_init_done = true;
+		if (s_dcbz_needs_emul)
+			fprintf(stderr, "[dcbz-trap] CPU zeroes >32 bytes per dcbz; enabling 32-byte emulation\n");
+	}
+	return s_dcbz_needs_emul;
+}
+
+extern "C" bool dcbz_needs_emulation(void)
+{
+	return s_dcbz_init_done && s_dcbz_needs_emul;
+}
+
+extern "C" int dcbz_trap_patch_range(void *start, size_t bytes)
+{
+	int count = 0;
+	uint32 *p = (uint32 *)start;
+	size_t n = bytes / 4;
+	for (size_t i = 0; i < n; i++) {
+		uint32 inst = ntohl(p[i]);  // PPC instructions are big-endian on the wire
+		if (is_dcbz(inst)) {
+			p[i] = htonl(dcbz_to_td(inst));
+			count++;
+		}
+	}
+	return count;
+}
+
+extern "C" bool dcbz_trap_handle_exec_fault(uint32 fault_addr, uint32 pc)
+{
+	if (!dcbz_needs_emulation())
+		return false;
+	// Only handle execute faults (si_addr == pc) within Mac RAM.
+	if (fault_addr != pc || fault_addr >= RAMBase + RAMSize)
+		return false;
+
+	long ps = sysconf(_SC_PAGESIZE);
+	if (ps <= 0) ps = 4096;
+	uint32 page_base = fault_addr & ~((uint32)ps - 1);
+
+	int patched = dcbz_trap_patch_range((void *)(uintptr_t)page_base, (size_t)ps);
+
+	if (mprotect((void *)(uintptr_t)page_base, ps,
+	             PROT_READ | PROT_WRITE | PROT_EXEC) < 0) {
+		// Can't recover: returning false here would let the caller try the
+		// generic fault path, which won't help on an execute fault we still
+		// can't handle. Abort hard so the failure is visible.
+		fprintf(stderr, "[dcbz-trap] mprotect(%08x, %ld, RWX) failed: %s\n",
+		        page_base, ps, strerror(errno));
+		abort();
+	}
+	if (patched > 0)
+		flush_icache_range(page_base, page_base + ps);
+	return true;
+}
+
+
+/*
  *  SIGSEGV handler
  */
 
@@ -1882,17 +1984,22 @@ static void sigsegv_handler(int sig, siginfo_t *sip, void *scp)
 {
 	machine_regs *r = MACHINE_REGISTERS(scp);
 
-	// Get effective address
-	uint32 addr = r->dar();
-	
 #ifdef SYSTEM_CLOBBERS_R2
-	// Restore pointer to Thread Local Storage
+	// Restore pointer to Thread Local Storage. MUST happen before any code that
+	// accesses globals or calls non-trivial functions
 	set_r2(TOC);
 #endif
 #ifdef SYSTEM_CLOBBERS_R13
 	// Restore pointer to .sdata section
 	set_r13(R13);
 #endif
+
+	// dcbz-trap: first-execute fault on a Mac RAM page → patch dcbz and retry
+	if (dcbz_trap_handle_exec_fault((uint32)(uintptr_t)sip->si_addr, (uint32)r->pc()))
+		return;
+
+	// Get effective address
+	uint32 addr = r->dar();
 
 #if ENABLE_VOSF
 	// Handle screen fault
@@ -2178,6 +2285,25 @@ power_inst:		sprintf(str, GetString(STR_POWER_INSTRUCTION_ERR), r->pc(), r->gpr(
 
 			case 31:
 				switch (exop) {
+					case 68:	// td -- our dcbz replacement (see dcbz_trap.h)
+						// We replace every dcbz with `td 0, RA, RB`; td is illegal
+						// in 32-bit user mode → SIGILL. Emulate the original dcbz
+						// here as a 32-byte zero (G3/G4 semantics), regardless of
+						// the real CPU's cache line size.
+						if (is_dcbz_td_trap(opcode)) {
+							uint32 ea = (ra == 0 ? 0 : (uint32)r->gpr(ra)) + (uint32)r->gpr(rb);
+							uint32 aligned = ea & ~0x1fu;
+							bool in_ram = (aligned + 32 <= RAMBase + RAMSize);
+							bool in_rom = (aligned >= ROMBase && aligned + 32 <= ROMBase + ROM_AREA_SIZE);
+							if (in_ram || in_rom) {
+								uint32 *zp = (uint32 *)(uintptr_t)aligned;
+								for (int i = 0; i < 8; i++) zp[i] = 0;
+							}
+							r->pc() += 4;
+							goto rti;
+						}
+						break;
+
 					case 83:	// mfmsr
 						r->gpr(rd) = 0xf072;
 						r->pc() += 4;
