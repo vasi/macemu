@@ -54,6 +54,21 @@ static inline uint32 dcbz_to_td(uint32 dcbz)
 	return 0x7c000088u | (ra << 16) | (rb << 11);
 }
 
+/* mtlr-r29 trap: a separate td encoding distinguishable from dcbz traps.
+ * `td 31, r29, r29` = 0x7ffde888. TO=31, RA=RB=29 — picked so the SIGILL
+ * handler can match exactly without ambiguity. Used to instrument the 68K
+ * interpreter's dispatch to catch when r29 reaches a bogus value
+ * (PPC970 0x50580000 crash). */
+static inline bool is_mtlr_r29(uint32 inst)
+{
+	return inst == 0x7fa803a6u;	/* mtlr r29 = mtspr 8, r29 */
+}
+
+static inline bool is_mtlr_r29_trap(uint32 inst)
+{
+	return inst == 0x7ffde888u;
+}
+
 /* --- Runtime ---------------------------------------------------------------- */
 
 /* Probe the CPU's dcbz behavior. Call once at startup, before any code that
@@ -73,6 +88,11 @@ int dcbz_trap_patch_range(void *start, size_t bytes);
  * patch any dcbz in the page, mprotect it executable, flush icache. Returns
  * true if the fault was handled (caller should return immediately). */
 bool dcbz_trap_handle_exec_fault(uint32 fault_addr, uint32 pc);
+
+/* Scan [start, start+bytes) for `mtlr r29` instructions and replace each
+ * with the td-trap that the SIGILL handler emulates (after sanity-checking
+ * r29's value). Returns the number of replacements made. */
+int mtlr_r29_trap_patch_range(void *start, size_t bytes);
 
 #ifdef __cplusplus
 }

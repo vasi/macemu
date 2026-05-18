@@ -687,6 +687,7 @@ static bool install_signal_handlers(void)
 		ErrorAlert(str);
 		return false;
 	}
+
 #else
 	// Install SIGSEGV handler for CPU emulator
 	if (!sigsegv_install_handler(sigsegv_handler)) {
@@ -1195,6 +1196,14 @@ int main(int argc, char **argv)
 #endif
 	if (sigaction(SIGILL, &sigill_action, NULL) < 0) {
 		sprintf(str, GetString(STR_SIG_INSTALL_ERR), "SIGILL", strerror(errno));
+		ErrorAlert(str);
+		goto quit;
+	}
+	// PPC970 raises SIGTRAP (not SIGILL) for `td TO,RA,RB` when TO!=0, since
+	// the trap condition is evaluated and matches. Our dcbz and mtlr-r29 traps
+	// both go through sigill_handler — register it for SIGTRAP as well.
+	if (sigaction(SIGTRAP, &sigill_action, NULL) < 0) {
+		sprintf(str, GetString(STR_SIG_INSTALL_ERR), "SIGTRAP", strerror(errno));
 		ErrorAlert(str);
 		goto quit;
 	}
@@ -1945,6 +1954,21 @@ extern "C" int dcbz_trap_patch_range(void *start, size_t bytes)
 	return count;
 }
 
+extern "C" int mtlr_r29_trap_patch_range(void *start, size_t bytes)
+{
+	int count = 0;
+	uint32 *p = (uint32 *)start;
+	size_t n = bytes / 4;
+	for (size_t i = 0; i < n; i++) {
+		uint32 inst = ntohl(p[i]);
+		if (is_mtlr_r29(inst)) {
+			p[i] = htonl(0x7ffde888u);	// td 31, r29, r29
+			count++;
+		}
+	}
+	return count;
+}
+
 extern "C" bool dcbz_trap_handle_exec_fault(uint32 fault_addr, uint32 pc)
 {
 	if (!dcbz_needs_emulation())
@@ -2299,6 +2323,28 @@ power_inst:		sprintf(str, GetString(STR_POWER_INSTRUCTION_ERR), r->pc(), r->gpr(
 								uint32 *zp = (uint32 *)(uintptr_t)aligned;
 								for (int i = 0; i < 8; i++) zp[i] = 0;
 							}
+							r->pc() += 4;
+							goto rti;
+						}
+						// mtlr-r29 instrumentation (debug aid for the
+						// PPC970 0x50580000 crash). Every `mtlr r29` in
+						// the 68K dispatch is replaced with this trap.
+						// Normally just emulate the mtlr; if r29 is bad
+						// (outside the LA_DispatchTable range), log and
+						// abort so the trap PC pinpoints the source.
+						if (is_mtlr_r29_trap(opcode)) {
+							uint32 r29v = (uint32)r->gpr(29);
+							if ((r29v & 0xfff80000u) != 0x50480000u) {
+								fprintf(stderr,
+									"[mtlr-trap] pc=%08x  bad r29=%08x  "
+									"r24=%08x r28=%08x lr=%08x ctr=%08x\n",
+									(uint32)r->pc(), r29v,
+									(uint32)r->gpr(24), (uint32)r->gpr(28),
+									(uint32)r->lr(), (uint32)r->ctr());
+								fflush(stderr);
+								abort();
+							}
+							r->link = r29v;	// emulate: lr = r29
 							r->pc() += 4;
 							goto rti;
 						}

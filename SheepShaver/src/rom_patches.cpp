@@ -721,6 +721,15 @@ bool PatchROM(void)
 		D(bug("[dcbz-trap] patched %d dcbz in ROM\n", n));
 	}
 
+	// Instrument every `mtlr r29` in ROM with a td-trap so sigill_handler can
+	// sanity-check r29 (debug aid for the PPC970 0x50580000 crash — see
+	// dcbz_trap.h and the SIGILL handler in main_unix.cpp). Slow but lets us
+	// pinpoint which dispatch site fires with a bogus r29.
+	{
+		int n = mtlr_r29_trap_patch_range(ROMBaseHost, ROM_SIZE);
+		D(bug("[mtlr-trap] patched %d mtlr r29 in ROM\n", n));
+	}
+
 #ifdef M68K_BREAK_POINT
 	// Install 68k breakpoint
 	uint16 *wp = (uint16 *)(ROMBaseHost + M68K_BREAK_POINT);
