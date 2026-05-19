@@ -952,6 +952,27 @@ int main(int argc, char **argv)
 		goto quit;
 	}
 
+	// Install our own fatal-I/O handler. The default one calls exit(1), which
+	// fires atexit handlers and static destructors. The emul thread keeps
+	// running during that teardown and races the destruction of global state
+	// (e.g. the disk drives vector), producing use-after-free crashes such as
+	// SIGSEGV in SysIsDiskInserted.
+	//
+	// On Linux, SheepShaver's pthread_create is overridden in sheepthreads.c
+	// to use __clone() without CLONE_THREAD, so each "thread" is a separate
+	// Linux task with its own TGID. That means _exit/exit_group only
+	// terminates the calling thread; siblings keep running and the window
+	// never closes. Send SIGKILL to the whole process group so every clone
+	// (which inherits our pgid) goes down at once. SIGKILL can't be blocked
+	// or handled, so this is reliable; _exit afterwards is just a fallback.
+	XSetIOErrorHandler([](Display *) -> int {
+		const char msg[] = "X server connection lost, killing process group\n";
+		write(STDERR_FILENO, msg, sizeof(msg) - 1);
+		kill(0, SIGKILL);
+		_exit(1);
+		return 0;
+	});
+
 #if defined(ENABLE_XF86_DGA) && !defined(ENABLE_MON)
 	// Fork out, so we can return from fullscreen mode when things get ugly
 	XF86DGAForkApp(DefaultScreen(x_display));
@@ -1137,6 +1158,16 @@ int main(int argc, char **argv)
 		ErrorAlert(GetString(STR_RAM_HIGHER_THAN_ROM_ERR));
 		goto quit;
 	}
+
+	// Dump memory layout (helps interpret crash dumps)
+	printf("--- SheepShaver memory layout ---\n");
+	printf("  RAM        %08x..%08x  (size %08x)\n", RAMBase, RAMBase + RAMSize, RAMSize);
+	printf("  ROM        %08x..%08x  (area_size %08x)\n", ROMBase, ROMBase + ROM_AREA_SIZE, ROM_AREA_SIZE);
+	printf("  KernelData %08x..%08x  (alt %08x)\n", KernelDataAddr, KernelDataAddr + KERNEL_AREA_SIZE, (uint32)KERNEL_DATA2_BASE);
+	printf("  DR_EMU     %08x..%08x\n", (uint32)DR_EMULATOR_BASE, (uint32)(DR_EMULATOR_BASE + DR_EMULATOR_SIZE));
+	printf("  DR_CACHE   %08x..%08x\n", (uint32)DR_CACHE_BASE, (uint32)(DR_CACHE_BASE + DR_CACHE_SIZE));
+	printf("---------------------------------\n");
+	fflush(stdout);
 
 	// Create area for SheepShaver data
 	if (!SheepMem::Init()) {
@@ -2126,6 +2157,38 @@ static void sigsegv_handler(int sig, siginfo_t *sip, void *scp)
 		QuitEmulator();
 		return;
 	} else {
+		// Dump extra diagnostics before the tick thread takes over.
+		// Avoid printf/fopen here — they aren't async-signal-safe (locks on
+		// FILE*, malloc inside fopen). Use snprintf into a stack buffer plus
+		// write(2), and open/read/write for /proc/self/maps.
+		{
+			char buf[512];
+			int n;
+			int pc_in_ram = (r->pc() >= RAMBase && r->pc() < (RAMBase + RAMSize));
+			int pc_in_rom = (r->pc() >= ROMBase && r->pc() < (ROMBase + ROM_AREA_SIZE));
+			int pc_in_drc = (r->pc() >= DR_CACHE_BASE && r->pc() < (DR_CACHE_BASE + DR_CACHE_SIZE));
+			n = snprintf(buf, sizeof(buf),
+				"--- SIGSEGV/SIGBUS extra info ---\n"
+				"  sig=%d si_code=%d si_addr=%p\n"
+				"  DAR=%08x  PC=%08x  LR=%08x  CTR=%08x\n"
+				"  mac_fault=%d  pc-in-RAM=%d  pc-in-ROM=%d  pc-in-DRC=%d\n",
+				sig, sip ? sip->si_code : -1, sip ? sip->si_addr : (void *)0,
+				r->dar(), (uint32)r->pc(), (uint32)r->lr(), (uint32)r->ctr(),
+				pc_in_ram || pc_in_rom || pc_in_drc, pc_in_ram, pc_in_rom, pc_in_drc);
+			if (n > 0) write(STDOUT_FILENO, buf, (size_t)n);
+
+			int mfd = open("/proc/self/maps", O_RDONLY);
+			if (mfd >= 0) {
+				const char hdr[] = "--- /proc/self/maps ---\n";
+				const char ftr[] = "-----------------------\n";
+				write(STDOUT_FILENO, hdr, sizeof(hdr) - 1);
+				ssize_t got;
+				while ((got = read(mfd, buf, sizeof(buf))) > 0)
+					write(STDOUT_FILENO, buf, (size_t)got);
+				close(mfd);
+				write(STDOUT_FILENO, ftr, sizeof(ftr) - 1);
+			}
+		}
 		// We crashed. Save registers, tell tick thread and loop forever
 		build_sigregs(&sigsegv_regs, r);
 		emul_thread_fatal = true;
