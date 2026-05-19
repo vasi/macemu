@@ -943,6 +943,15 @@ int main(int argc, char **argv)
 	}
 
 #ifndef USE_SDL_VIDEO
+	// Make Xlib thread-safe. Several SheepShaver threads (emul, redraw,
+	// clipboard) issue Xlib calls without consistently holding the
+	// XDisplayLock(), which races on Xlib's internal output buffer and can
+	// cause the server to receive a malformed request and drop the
+	// connection ("XIO: fatal IO error 0 (Success)"). XInitThreads must be
+	// the very first Xlib call, before XOpenDisplay.
+	if (!XInitThreads())
+		fprintf(stderr, "Warning: XInitThreads() failed; Xlib calls are not thread-safe\n");
+
 	// Open display
 	x_display = XOpenDisplay(x_display_name);
 	if (x_display == NULL) {
